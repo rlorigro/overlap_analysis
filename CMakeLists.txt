@@ -15,11 +15,14 @@ message(STATUS "CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_CXX_FLAGS "-fexceptions -fsanitize=address")
+set(CMAKE_CXX_FLAGS "-fsanitize=address")
 #set(ASAN_OPTIONS=check_initialization_order=1)
 #set(ASAN_OPTIONS=detect_leaks=1)
 
 set(CMAKE_CXX_FLAGS "-fexceptions")
+
+# Needed to run Boost <v1.64 on c++17, (consider upgrading boost?)
+set(CMAKE_CXX_FLAGS "-fno-new-ttp-matching")
 
 add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
 #add_definitions(-O3 -Wall)              # Much optimization
@@ -99,6 +102,7 @@ endforeach()
 
 set(EXECUTABLES
         fasta_to_RLE_fasta
+        label_alignment_info
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})

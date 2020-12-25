@@ -36,8 +36,6 @@ using boost::program_options::variables_map;
 using boost::program_options::value;
 
 
-/// TEMPLATE BASED METHODS ///
-
 template<class T> void runlength_encode(RunlengthSequenceElement& runlength_sequence, T& sequence){
     runlength_sequence = {};
 
@@ -72,6 +70,7 @@ template<class T> void runlength_decode(RunlengthSequenceElement& runlength_sequ
         sequence.sequence += string(runlength_sequence.lengths[i], runlength_sequence.sequence[i]);
     }
 }
+
 
 template<class T> void runlength_decode(RunlengthSequenceElement& runlength_sequence, T& sequence, size_t start, size_t stop){
     sequence = {};
