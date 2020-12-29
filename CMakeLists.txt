@@ -45,6 +45,7 @@ include_directories(
 
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
+        src/AlignmentInterval.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
         src/SequenceElement.cpp
@@ -82,7 +83,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 # -------- TESTS --------
 
 set(TESTS
-
+        test_boost_interval_map
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
