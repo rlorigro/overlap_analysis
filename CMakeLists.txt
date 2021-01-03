@@ -4,7 +4,7 @@
 # ---------------------------------- #
 ######################################
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 project(overlap_analysis VERSION 0.0.0)
 
 message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
@@ -31,6 +31,13 @@ add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
 # on the boost system library.
 add_definitions(-DBOOST_SYSTEM_NO_DEPRECATED)
 add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY)
+
+# Some potentially helpful messages
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+
 
 #########################################
 # ------------------------------------- #
@@ -62,6 +69,108 @@ set_target_properties(overlap_analysis PROPERTIES PREFIX "")
 # Eliminate an extraneous -D during compilation.
 set_target_properties(overlap_analysis PROPERTIES DEFINE_SYMBOL "")
 
+##############################################
+# ------------------------------------------ #
+# -------- LINKING EXTERNAL LIBRARY -------- #
+# ------------------ ogdf ------------------ #
+# ------------------------------------------ #
+##############################################
+
+# Need to explicitly enable ExternalProject functionality
+include(ExternalProject)
+
+# Download or update library as an external project
+ExternalProject_Add(project_ogdf
+        GIT_REPOSITORY https://github.com/ogdf/ogdf.git
+        PREFIX ${CMAKE_SOURCE_DIR}/external/
+        DOWNLOAD_COMMAND ""
+        UPDATE_COMMAND ""
+        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/ogdf/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/ogdf/lib
+        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/stamp/
+#        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/src/
+        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/build/
+        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/
+        INSTALL_COMMAND make install
+        )
+
+# Define INSTALL_DIR as the install directory for external library
+ExternalProject_Get_Property(project_ogdf INSTALL_DIR)
+
+# Create new library for external project (so it can be linked with main library)
+add_library(ogdf STATIC IMPORTED)
+set_property(TARGET ogdf
+        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/x86_64-linux-gnu/libOGDF.a)
+
+# Create new library for external project (so it can be linked with main library)
+add_library(coin STATIC IMPORTED)
+set_property(TARGET coin
+        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/x86_64-linux-gnu/libCOIN.a)
+
+# Define main library as dependent on the downloaded project (transitively)
+add_dependencies(ogdf
+        project_ogdf
+        coin)
+add_dependencies(overlap_analysis ogdf)
+
+# Ensure that main library has access to primary dependencies' and secondary dependencies' headers
+include_directories(external/ogdf/include/)
+
+# Add runtime path for main library so it can access external library
+#set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/ogdf")
+
+message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
+
+
+
+##############################################
+# ------------------------------------------ #
+# -------- LINKING EXTERNAL LIBRARY -------- #
+# --------------- networkit ---------------- #
+# ------------------------------------------ #
+##############################################
+
+# Download or update library as an external project
+ExternalProject_Add(project_networkit
+        GIT_REPOSITORY https://github.com/networkit/networkit.git
+        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/
+        DOWNLOAD_COMMAND ""
+        UPDATE_COMMAND ""
+        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/networkit/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/networkit/lib
+        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/networkit/stamp/
+#        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/networkit/src/
+        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/networkit/build/
+        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/networkit/
+        INSTALL_COMMAND make install
+        )
+
+# Define INSTALL_DIR as the install directory for external library
+ExternalProject_Get_Property(project_networkit INSTALL_DIR)
+
+# Create new library for external project (so it can be linked with main library)
+add_library(networkit SHARED IMPORTED)
+set_property(TARGET networkit
+        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libnetworkit.so)
+
+add_library(tlx STATIC IMPORTED)
+set_property(TARGET tlx
+        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libtlx.a)
+
+# Define main library as dependent on the downloaded project (transitively)
+add_dependencies(networkit
+        project_networkit
+        tlx)
+
+add_dependencies(overlap_analysis networkit)
+
+# Ensure that main library has access to primary dependencies' and secondary dependencies' headers
+include_directories(external/networkit/include/)
+
+# Add runtime path for main library so it can access external library
+#set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/networkit")
+
+message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
+
+
 
 ############################################
 # ---------------------------------------- #
@@ -84,6 +193,8 @@ include_directories( ${Boost_INCLUDE_DIR} )
 
 set(TESTS
         test_boost_interval_map
+        test_ogdf
+        test_networkit
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
@@ -94,6 +205,10 @@ foreach(FILENAME_PREFIX ${TESTS})
             Threads::Threads
             ${Boost_LIBRARIES}
             stdc++fs
+            ogdf
+            coin
+            networkit
+            tlx
             )
 
 endforeach()
@@ -114,6 +229,10 @@ foreach(FILENAME_PREFIX ${EXECUTABLES})
             Threads::Threads
             ${Boost_LIBRARIES}
             stdc++fs
+            ogdf
+            coin
+            networkit
+            tlx
             )
 endforeach()
 
@@ -127,9 +246,4 @@ install(TARGETS
         overlap_analysis
         DESTINATION ${BINARY_INSTALL_DIR})
 
-# Some potentially helpful messages
-message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
-message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
-message(STATUS "CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 
