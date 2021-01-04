@@ -1,41 +1,67 @@
 #include <ogdf/basic/GraphAttributes.h>
+#include <ogdf/basic/graphics.h>
+#include <ogdf/energybased/FMMMLayout.h>
 #include <ogdf/fileformats/GraphIO.h>
 
 using ogdf::Graph;
 using ogdf::GraphAttributes;
 using ogdf::node;
 using ogdf::edge;
-using ogdf::DPolyline;
-using ogdf::DPoint;
+using ogdf::FMMMLayout;
+using ogdf::FMMMOptions;
+using ogdf::Shape;
+
+#include <stdexcept>
+#include <vector>
+#include <string>
+
+using std::runtime_error;
+using std::vector;
+using std::string;
 
 
-/// Taken from https://ogdf.github.io/doc/ogdf/ex-basic.html
 int main(){
-    Graph G;
-    GraphAttributes GA(G,GraphAttributes::nodeGraphics | GraphAttributes::edgeGraphics);
+    Graph g;
+    GraphAttributes graph_attributes(g,
+        GraphAttributes::nodeGraphics |
+        GraphAttributes::edgeGraphics |
+        GraphAttributes::nodeLabel |
+        GraphAttributes::edgeStyle |
+        GraphAttributes::nodeStyle |
+        GraphAttributes::nodeTemplate);
 
-    const int LEN = 11;
-    for(int i = 1; i < LEN; ++i) {
-        node left = G.newNode();
-        GA.x(left) = -5*(i+1);
-        GA.y(left) = -20*i;
-        GA.width(left) = 10*(i+1);
-        GA.height(left) = 15;
+    vector<node> nodes;
 
-        node bottom = G.newNode();
-        GA.x(bottom) = 20*(LEN-i);
-        GA.y(bottom) = 5*(LEN+1-i);
-        GA.width(bottom) = 15;
-        GA.height(bottom) = 10*(LEN+1-i);
+    size_t n_nodes = 5;
 
-        edge e = G.newEdge(left,bottom);
-        DPolyline &p = GA.bends(e);
-        p.pushBack(DPoint(10,-20*i));
-        p.pushBack(DPoint(20*(LEN-i),-10));
+    for (size_t i=0; i<n_nodes; i++) {
+        auto n = g.newNode(i);
+        nodes.emplace_back(n);
+        graph_attributes.shape(n) = Shape::Ellipse;
     }
 
-    ogdf::GraphIO::write(GA, "output-manual.gml", ogdf::GraphIO::writeGML);
-    ogdf::GraphIO::write(GA, "output-manual.svg", ogdf::GraphIO::drawSVG);
+    for (size_t i1=0; i1<n_nodes; i1++) {
+        for (size_t i2=i1; i2<n_nodes; i2++) {
+            if (i1 == i2) {
+                continue;
+            }
+
+            g.newEdge(nodes[i1], nodes[i2]);
+        }
+    }
+
+    FMMMLayout layout_engine;
+
+    layout_engine.useHighLevelOptions(true);
+    layout_engine.unitEdgeLength(15.0);
+    layout_engine.newInitialPlacement(true);
+    layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
+    layout_engine.call(graph_attributes);
+
+    graph_attributes.directed() = false;
+    ogdf::GraphIO::write(graph_attributes, "test_ogdf.svg", ogdf::GraphIO::drawSVG);
+
+
 
     return 0;
 }

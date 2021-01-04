@@ -6,13 +6,13 @@ using NetworKit::node;
 using NetworKit::edgeid;
 using NetworKit::MaxentStress;
 
+#include <stdexcept>
 #include <vector>
 #include <string>
-#include <stdexcept>
 
+using std::runtime_error;
 using std::vector;
 using std::string;
-using std::runtime_error;
 
 
 void run_command(string& argument_string){
