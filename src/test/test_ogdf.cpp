@@ -61,7 +61,5 @@ int main(){
     graph_attributes.directed() = false;
     ogdf::GraphIO::write(graph_attributes, "test_ogdf.svg", ogdf::GraphIO::drawSVG);
 
-
-
     return 0;
 }

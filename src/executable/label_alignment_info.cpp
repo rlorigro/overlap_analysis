@@ -10,6 +10,7 @@ using boost::bimap;
 #include <ogdf/basic/GraphAttributes.h>
 #include <ogdf/basic/graphics.h>
 #include <ogdf/energybased/FMMMLayout.h>
+#include <ogdf/energybased/SpringEmbedderKK.h>
 #include <ogdf/fileformats/GraphIO.h>
 
 using ogdf::Graph;
@@ -97,6 +98,82 @@ uint32_t load_csv_as_id_map(path& read_csv_path, uint32_bimap& id_vs_name){
 }
 
 
+/// Given an overlap map with the structure: [interval_start, interval_stop) -> {read_id_0, read_id_1, ... },
+/// build the edges of a graph, one edge for each inferred overlap.
+/// Graph must have existing nodes, stored by the read ID in a vector.
+///
+/// Method:
+/// Iterate the sets and add any edges that don't exist yet in the graph
+///
+/// Case 1:
+/// s1 = {a,b,c}
+/// s2 = {a,b,c,d}
+///
+/// s2 - s1 = {d}
+/// add all edges from (s2 - s1) -> s2
+///
+///
+/// Case 2:
+/// s1 = {a,b,c,d}
+/// s2 = {a,b,c}
+///
+/// s2 - s1 = {}
+/// Do nothing
+///
+///
+/// Case 3:
+/// s1 = {a,b,c}
+/// s2 = {a,b,d}
+///
+/// s2 - s1 = {d}
+/// add all edges from (s2 - s1) -> s2
+///
+void assign_graph_edges_from_overlap_map(
+        RegionalOverlapMap& overlap_map,
+        ogdf::Graph& graph,
+        vector<node>& nodes){
+
+    set<uint32_t> empty_set = {};
+
+    for (auto& item: overlap_map.intervals){
+        const auto& overlaps = item.second;
+        auto& prev_read_set = empty_set;
+
+        // TODO: Iterate the sets and add any edges that don't exist yet in the graph, as they are encountered.
+        for (auto i = begin(overlaps), e = end(overlaps); i !=e; ++i){
+            const auto& interval = i->first;
+            auto& read_set = i->second;
+
+//            cerr << interval << " -> ";
+//            for (const auto& id: read_set){
+//                cerr << id << " " ;
+//            }
+//            cerr << '\n';
+
+            for (const auto& id: read_set){
+                // If this read id is not in the previous set, it indicates that more edges need to be built
+                if (prev_read_set.count(id) == 0){
+                    for (const auto& other_id: read_set){
+                        if (other_id != id){
+                            // Don't duplicate edges
+                            if (graph.searchEdge(nodes[id], nodes[other_id]) == nullptr){
+//                                cerr << "Creating edge: " << id << "->" << other_id << '\n';
+                                graph.newEdge(nodes[id], nodes[other_id]);
+                            }
+                        }
+                    }
+                }
+            }
+            cerr << '\n';
+
+            prev_read_set = read_set;
+        }
+    }
+    cerr << '\n';
+
+}
+
+
 /// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md using the following data:
 ///
 /// Col (1-based)       Data                        Type
@@ -110,7 +187,8 @@ void load_paf_as_graph(
         uint32_bimap& id_vs_name,
         RegionalOverlapMap& overlap_map,
         ogdf::Graph& graph,
-        vector<node>& nodes){
+        vector<node>& nodes,
+        uint32_t min_quality){
 
     ifstream paf_file(paf_path);
 
@@ -123,6 +201,8 @@ void load_paf_as_graph(
     uint32_t read_name;     // Assume numeric read names
     uint32_t start;
     uint32_t stop;
+    uint32_t quality;
+
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
     char c;
@@ -140,11 +220,20 @@ void load_paf_as_graph(
             }
             else if (n_delimiters == 8) {
                 stop = stoi(token);
+            }
+            else if (n_delimiters == 11) {
+                quality = stoi(token);
+
                 cerr << region_name << " " << start << " " << stop << '\n';
 
-                uint32_t id = id_vs_name.right.at(read_name);
-                overlap_map.insert(region_name, start, stop, id);
-                nodes[id] = graph.newNode();
+                if (quality >= min_quality) {
+                    uint32_t id = id_vs_name.right.at(read_name);
+                    overlap_map.insert(region_name, start, stop, id);
+
+                    if (nodes[id] == nullptr) {
+                        nodes[id] = graph.newNode();
+                    }
+                }
             }
 
             token.resize(0);
@@ -160,55 +249,43 @@ void load_paf_as_graph(
         }
     }
 
-    // TODO: Move this into separate function and rename this existing one as load_as_interval_map or w.e.
-    for (auto& item: overlap_map.intervals){
-        const auto& overlaps = item.second;
-        const auto& prev = item.second.begin();
+    assign_graph_edges_from_overlap_map(overlap_map, graph, nodes);
+}
 
-        // TODO: Build first set of edges by iterating all combos
-//        for (){
-//
-//        }
 
-        // TODO: Iterate the sets and add any edges that don't exist yet in the graph, as they are encountered.
-        // Case 1:
-        // s1 = {a,b,c}
-        // s2 = {a,b,c,d}
-        //
-        // s2 - s1 = {d}
-        // s1 AND s2 = {a,b,c}
-        // add all edges from (s2 - s1) -> (s2 AND s1)
-        //
-        //
-        // Case 2:
-        // s1 = {a,b,c,d}
-        // s2 = {a,b,c}
-        //
-        // s2 - s1 = {}
-        // s1 AND s2 = {a,b,c}
-        // Do nothing
-        //
-        //
-        // Case 3:
-        // s1 = {a,b,c}
-        // s2 = {a,b,d}
-        //
-        // s2 - s1 = {d}
-        // s1 AND s2 = {a,b}
-        // add all edges from (s2 - s1) -> (s2 AND s1)
-        //
+void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_bimap& id_vs_name, path output_path){
+    GraphAttributes graph_attributes(
+            graph,
+            GraphAttributes::nodeGraphics |
+            GraphAttributes::edgeGraphics |
+            GraphAttributes::nodeLabel |
+            GraphAttributes::edgeStyle |
+            GraphAttributes::nodeStyle |
+            GraphAttributes::nodeTemplate);
 
-        for (auto i = ++begin(overlaps), e = end(overlaps); i !=e; ++i){
-            const auto& interval = i->first;
-            const auto& read_set = i->second;
-            cerr << interval << " -> ";
-            for (auto& item2: read_set){
-                cerr << item2 << " " ;
-            }
-            cerr << '\n';
+    for (size_t id=0; id<nodes.size(); id++){
+        if (nodes[id] == nullptr){
+            continue;
         }
+
+        graph_attributes.shape(nodes[id]) = ogdf::Shape::Ellipse;
+        graph_attributes.label(nodes[id]) = to_string(id_vs_name.left.at(id));
     }
-    cerr << '\n';
+
+    FMMMLayout layout_engine;
+    layout_engine.useHighLevelOptions(true);
+    layout_engine.unitEdgeLength(40.0);
+    layout_engine.newInitialPlacement(true);
+    layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
+
+//    layout_engine.springStrength(3);
+    cerr << layout_engine.springStrength() << '\n';
+
+    layout_engine.call(graph_attributes);
+
+    graph_attributes.directed() = false;
+    ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
+
 }
 
 
@@ -221,8 +298,11 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path)
     Graph overlap_graph;
     vector<node> nodes;
     nodes.resize(max_id+1, nullptr);
-    load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes);
 
+    uint32_t min_quality = 50;
+    load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
+
+    write_graph_to_svg(overlap_graph, nodes, id_vs_name, "test_label_alignment_info.svg");
 }
 
 
