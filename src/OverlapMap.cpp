@@ -1,4 +1,4 @@
-#include "AlignmentInterval.hpp"
+#include "OverlapMap.hpp"
 
 
 void RegionalOverlapMap::insert(string& region_name, uint32_t start, uint32_t stop, uint32_t id) {
@@ -29,7 +29,6 @@ void RegionalOverlapMap::print(ostream& out){
             out << '\n';
         }
     }
-    out << '\n';
 }
 
 

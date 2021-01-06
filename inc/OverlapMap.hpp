@@ -1,5 +1,5 @@
-#ifndef OVERLAP_ANALYSIS_ALIGNMENTINTERVAL_HPP
-#define OVERLAP_ANALYSIS_ALIGNMENTINTERVAL_HPP
+#ifndef OVERLAP_ANALYSIS_OVERLAPMAP_HPP
+#define OVERLAP_ANALYSIS_OVERLAPMAP_HPP
 
 #include "boost/icl/split_interval_map.hpp"
 #include "boost/icl/interval_map.hpp"
@@ -37,4 +37,4 @@ public:
 };
 
 
-#endif //OVERLAP_ANALYSIS_ALIGNMENTINTERVAL_HPP
+#endif //OVERLAP_ANALYSIS_OVERLAPMAP_HPP

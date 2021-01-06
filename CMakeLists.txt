@@ -52,9 +52,10 @@ include_directories(
 
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
-        src/AlignmentInterval.cpp
+        src/OverlapMap.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
+        src/PafElement.cpp
         src/SequenceElement.cpp
         src/RunlengthSequenceElement.cpp
         )
