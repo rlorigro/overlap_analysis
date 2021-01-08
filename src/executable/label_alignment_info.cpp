@@ -40,11 +40,11 @@ using std::vector;
 using std::cerr;
 using std::cout;
 
-typedef bimap<uint32_t,uint32_t> uint32_bimap;
-typedef uint32_bimap::value_type bimap_pair;
+typedef bimap<uint32_t,string> uint32_string_bimap;
+typedef uint32_string_bimap::value_type bimap_pair;
 
 
-uint32_t load_csv_as_id_map(path& read_csv_path, uint32_bimap& id_vs_name){
+uint32_t load_csv_as_id_map(path& read_csv_path, uint32_string_bimap& id_vs_name){
     ///
     /// Parse a line of the ReadSummary.csv with the following format:
     ///     Id,Name, ... etc
@@ -61,7 +61,7 @@ uint32_t load_csv_as_id_map(path& read_csv_path, uint32_bimap& id_vs_name){
 
     string token;
     uint32_t id;
-    uint32_t name;
+    string name;
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
     uint32_t max_id = 0;
@@ -81,7 +81,7 @@ uint32_t load_csv_as_id_map(path& read_csv_path, uint32_bimap& id_vs_name){
                 }
             }
             else if (n_delimiters == 1) {
-                name = stoi(token);
+                name = token;
                 id_vs_name.insert(bimap_pair(id, name));
             }
 
@@ -188,7 +188,7 @@ void assign_graph_edges_from_overlap_map(
 ///
 void load_paf_as_graph(
         path paf_path,
-        uint32_bimap& id_vs_name,
+        uint32_string_bimap& id_vs_name,
         RegionalOverlapMap& overlap_map,
         ogdf::Graph& graph,
         vector<node>& nodes,
@@ -202,7 +202,7 @@ void load_paf_as_graph(
 
     string token;
     string region_name;
-    uint32_t read_name;     // Assume numeric read names
+    string read_name;
     uint32_t start;
     uint32_t stop;
     uint32_t quality;
@@ -214,7 +214,7 @@ void load_paf_as_graph(
     while (paf_file.get(c)) {
         if (c == '\t') {
             if (n_delimiters == 0) {
-                read_name = stoi(token);
+                read_name = token;
             }
             else if (n_delimiters == 5) {
                 region_name = token;
@@ -231,11 +231,19 @@ void load_paf_as_graph(
                 cerr << region_name << " " << start << " " << stop << '\n';
 
                 if (quality >= min_quality) {
-                    uint32_t id = id_vs_name.right.at(read_name);
-                    overlap_map.insert(region_name, start, stop, id);
 
-                    if (nodes[id] == nullptr) {
-                        nodes[id] = graph.newNode();
+                    auto result = id_vs_name.right.find(read_name);
+
+                    if (result != id_vs_name.right.end()) {
+                        uint32_t id = result->second;
+                        overlap_map.insert(region_name, start, stop, id);
+
+                        if (nodes[id] == nullptr) {
+                            nodes[id] = graph.newNode();
+                        }
+                    }
+                    else{
+                        cerr << "WARNING: skipping read not used in shasta assembly: " << read_name << '\n';
                     }
                 }
             }
@@ -257,7 +265,7 @@ void load_paf_as_graph(
 }
 
 
-void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_bimap& id_vs_name, path output_path, bool label=false){
+void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_string_bimap& id_vs_name, path output_path, bool label=false){
     GraphAttributes graph_attributes(
             graph,
             GraphAttributes::nodeGraphics |
@@ -280,7 +288,7 @@ void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_bimap& id_vs_n
         graph_attributes.height(nodes[id]) = node_diameter;
 
         if (label) {
-            graph_attributes.label(nodes[id]) = to_string(id_vs_name.left.at(id));
+            graph_attributes.label(nodes[id]) = id_vs_name.left.at(id);
         }
     }
 
@@ -307,7 +315,7 @@ void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_bimap& id_vs_n
 
 void load_paf_as_table(
         path paf_path,
-        uint32_bimap& id_vs_name,
+        uint32_string_bimap& id_vs_name,
         vector <vector <PafElement> >& paf_table){
 
     ifstream paf_file(paf_path);
@@ -318,7 +326,7 @@ void load_paf_as_table(
 
     string token;
     string region_name;
-    uint32_t read_name;     // Assume numeric read names
+    string read_name;
     uint32_t start;
     uint32_t stop;
     uint32_t quality;
@@ -330,7 +338,7 @@ void load_paf_as_table(
     while (paf_file.get(c)) {
         if (c == '\t') {
             if (n_delimiters == 0) {
-                read_name = stoi(token);
+                read_name = token;
             }
             else if (n_delimiters == 5) {
                 region_name = token;
@@ -344,9 +352,17 @@ void load_paf_as_table(
             else if (n_delimiters == 11) {
                 quality = stoi(token);
 
-                uint32_t id = id_vs_name.right.at(read_name);
-                paf_table[id].emplace_back(region_name, start, stop, quality);
-                cerr << region_name << " " << start << " " << stop << '\n';
+                auto result = id_vs_name.right.find(read_name);
+
+                // Check if the read was in shasta at all (may have been filtered upon loading)
+                if (result != id_vs_name.right.end()) {
+                    uint32_t id = result->second;
+                    paf_table[id].emplace_back(region_name, start, stop, quality);
+                    cerr << region_name << " " << start << " " << stop << '\n';
+                }
+                else{
+                    cerr << "WARNING: skipping read not used in shasta assembly: " << read_name << '\n';
+                }
             }
 
             token.resize(0);
@@ -436,14 +452,17 @@ void write_labelled_alignment_info(
     string line;
     string token;
     string region_name;
-    uint32_t read_id1;     // Assume numeric read names
-    uint32_t read_id2;     // Assume numeric read names
+    uint32_t read_id1;
+    uint32_t read_id2;
 
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
     char c;
 
     while (paf_file.get(c)) {
+        // Dump every character into the line string
+        line += c;
+
         if (c == ',') {
             if (n_lines == 0){
                 continue;
@@ -462,11 +481,11 @@ void write_labelled_alignment_info(
         else if (c == '\n'){
             // Write header or append the line
             if (n_lines == 0){
-                out_file << line << ",overlap";
+                out_file << line.substr(0, line.size() - 1) << ",overlap" << std::endl;
             }
             else {
                 uint32_t overlap_size = compute_overlap(read_id1, read_id2, overlap_graph, nodes, paf_table);
-                out_file << line << "," << overlap_size;
+                out_file << line.substr(0, line.size() - 1) << "," << overlap_size << std::endl;
             }
 
             token.resize(0);
@@ -478,9 +497,6 @@ void write_labelled_alignment_info(
             // Update the token if not a delimiter or newline char (i.e. not whitespace)
             token += c;
         }
-
-        // Dump every character into the line string
-        line += c;
     }
 }
 
@@ -489,7 +505,7 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
     path output_directory = output_path.parent_path();
     create_directories(output_directory);
 
-    uint32_bimap id_vs_name;
+    uint32_string_bimap id_vs_name;
     uint32_t max_id;
     max_id = load_csv_as_id_map(read_csv_path, id_vs_name);
 
@@ -498,7 +514,7 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
     vector<node> nodes;
     nodes.resize(max_id+1, nullptr);
 
-    uint32_t min_quality = 50;
+    uint32_t min_quality = 10;
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
     vector <vector <PafElement> > paf_table;
