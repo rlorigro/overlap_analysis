@@ -12,7 +12,6 @@ using boost::bimap;
 #include <ogdf/basic/GraphAttributes.h>
 #include <ogdf/basic/graphics.h>
 #include <ogdf/energybased/FMMMLayout.h>
-#include <ogdf/energybased/SpringEmbedderKK.h>
 #include <ogdf/fileformats/GraphIO.h>
 
 using ogdf::Graph;
@@ -25,7 +24,7 @@ using ogdf::Shape;
 
 #include <experimental/filesystem>
 #include <iostream>
-#include <fstream>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -37,6 +36,7 @@ using std::ofstream;
 using std::to_string;
 using std::string;
 using std::vector;
+using std::pair;
 using std::cerr;
 using std::cout;
 
@@ -132,7 +132,7 @@ uint32_t load_csv_as_id_map(path& read_csv_path, uint32_string_bimap& id_vs_name
 /// s2 - s1 = {d}
 /// add all edges from (s2 - s1) -> s2
 ///
-void assign_graph_edges_from_overlap_map(
+void create_graph_edges_from_overlap_map(
         RegionalOverlapMap& overlap_map,
         ogdf::Graph& graph,
         vector<node>& nodes){
@@ -143,7 +143,6 @@ void assign_graph_edges_from_overlap_map(
         const auto& overlaps = item.second;
         auto& prev_read_set = empty_set;
 
-        // TODO: Iterate the sets and add any edges that don't exist yet in the graph, as they are encountered.
         for (auto i = begin(overlaps), e = end(overlaps); i !=e; ++i){
             const auto& interval = i->first;
             auto& read_set = i->second;
@@ -261,16 +260,15 @@ void load_paf_as_graph(
         }
     }
 
-    assign_graph_edges_from_overlap_map(overlap_map, graph, nodes);
+    create_graph_edges_from_overlap_map(overlap_map, graph, nodes);
 }
 
 
-void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_string_bimap& id_vs_name, path output_path, bool label=false){
-    GraphAttributes graph_attributes(
+void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes){
+    graph_attributes = GraphAttributes(
             graph,
             GraphAttributes::nodeGraphics |
             GraphAttributes::edgeGraphics |
-            GraphAttributes::nodeLabel |
             GraphAttributes::edgeStyle |
             GraphAttributes::nodeStyle |
             GraphAttributes::nodeTemplate);
@@ -278,24 +276,44 @@ void write_graph_to_svg(Graph& graph, vector<node>& nodes, uint32_string_bimap& 
     uint32_t node_diameter = 8;
     ogdf::Color edge_color(20, 20, 20, 255);
 
+    for (auto node: graph.nodes){
+        if (node == nullptr){
+            continue;
+        }
+
+        graph_attributes.shape(node) = ogdf::Shape::Ellipse;
+        graph_attributes.width(node) = node_diameter;
+        graph_attributes.height(node) = node_diameter;
+    }
+
+    for (auto edge: graph.edges){
+        graph_attributes.strokeColor(edge) = edge_color;
+        graph_attributes.strokeWidth(edge) = 0.3;
+    }
+
+}
+
+
+void assign_graph_node_labels(
+        Graph& graph,
+        GraphAttributes& graph_attributes,
+        vector<node>& nodes,
+        uint32_string_bimap& id_vs_name
+        ){
+
+    graph_attributes.addAttributes(GraphAttributes::nodeLabel);
+
     for (size_t id=0; id<nodes.size(); id++){
         if (nodes[id] == nullptr){
             continue;
         }
 
-        graph_attributes.shape(nodes[id]) = ogdf::Shape::Ellipse;
-        graph_attributes.width(nodes[id]) = node_diameter;
-        graph_attributes.height(nodes[id]) = node_diameter;
-
-        if (label) {
-            graph_attributes.label(nodes[id]) = id_vs_name.left.at(id);
-        }
+        graph_attributes.label(nodes[id]) = id_vs_name.left.at(id);
     }
+}
 
-    for (auto edge: graph.edges){
-        graph_attributes.strokeColor(edge) = edge_color;
-    }
 
+void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path output_path){
 
     FMMMLayout layout_engine;
     layout_engine.useHighLevelOptions(true);
@@ -404,6 +422,8 @@ uint32_t compute_overlap(
                 overlap.insert(paf_element.target_name, paf_element.start, paf_element.stop, id2);
             }
 
+            // Iterate the resulting (possibly merged) intervals and see if any of them contain 2 read ids,
+            // and sum their length if they do.
             for (auto& region: overlap.intervals) {
                 for (auto& item: region.second) {
                     auto& interval = item.first;
@@ -436,9 +456,9 @@ void write_labelled_alignment_info(
         vector<node>& nodes,
         vector <vector <PafElement> >& paf_table){
 
-    ifstream paf_file(info_csv_path);
+    ifstream csv_file(info_csv_path);
 
-    if (not paf_file.good()){
+    if (not csv_file.good()){
         throw runtime_error("ERROR: could not open input file: " + info_csv_path.string());
     }
 
@@ -447,7 +467,6 @@ void write_labelled_alignment_info(
     if (not out_file.is_open()){
         throw runtime_error("ERROR: could not write to output file: " + output_path.string());
     }
-
 
     string line;
     string token;
@@ -459,7 +478,7 @@ void write_labelled_alignment_info(
     uint64_t n_lines = 0;
     char c;
 
-    while (paf_file.get(c)) {
+    while (csv_file.get(c)) {
         // Dump every character into the line string
         line += c;
 
@@ -501,7 +520,116 @@ void write_labelled_alignment_info(
 }
 
 
-void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path output_path){
+void find_shasta_false_positives(
+        path info_csv_path,
+        Graph& overlap_graph,
+        vector<node>& nodes,
+        vector <vector <PafElement> >& paf_table,
+        vector <pair <uint32_t, uint32_t> >& false_positives){
+
+    ifstream csv_file(info_csv_path);
+
+    if (not csv_file.good()){
+        throw runtime_error("ERROR: could not open input file: " + info_csv_path.string());
+    }
+
+    string line;
+    string token;
+    string region_name;
+    uint32_t read_id1;
+    uint32_t read_id2;
+
+    uint64_t n_delimiters = 0;
+    uint64_t n_lines = 0;
+    char c;
+
+    while (csv_file.get(c)) {
+        // Dump every character into the line string
+        line += c;
+
+        if (c == ',') {
+            if (n_lines == 0){
+                continue;
+            }
+
+            if (n_delimiters == 0) {
+                read_id1 = stoi(token);
+            }
+            if (n_delimiters == 1) {
+                read_id2 = stoi(token);
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            // Write header or append the line
+            if (n_lines > 0){
+                uint32_t overlap_size = compute_overlap(read_id1, read_id2, overlap_graph, nodes, paf_table);
+
+                if (overlap_size == 0){
+                    false_positives.emplace_back(read_id1, read_id2);
+                }
+            }
+
+            token.resize(0);
+            line.resize(0);
+            n_delimiters = 0;
+            n_lines++;
+        }
+        else {
+            // Update the token if not a delimiter or newline char (i.e. not whitespace)
+            token += c;
+        }
+    }
+}
+
+
+void add_false_positive_edges_to_graph(
+        path info_csv_path,
+        Graph& graph,
+        GraphAttributes& graph_attributes,
+        vector<node>& nodes,
+        vector <vector <PafElement> >& paf_table,
+        uint32_string_bimap id_vs_name
+        ){
+
+    ogdf::Color edge_color(255,103,0,255);
+
+    vector <pair <uint32_t, uint32_t> > false_positives;
+    find_shasta_false_positives(
+            info_csv_path,
+            graph,
+            nodes,
+            paf_table,
+            false_positives);
+
+    for (auto& [id, other_id]: false_positives){
+
+        // Node may have never been created if its only alignment was filtered out of the PAF
+        for (auto i: {id, other_id}) {
+            if (nodes[i] == nullptr) {
+                nodes[i] = graph.newNode();
+
+                graph_attributes.shape(nodes[i]) = ogdf::Shape::Ellipse;
+                graph_attributes.width(nodes[i]) = 8;
+                graph_attributes.height(nodes[i]) = 8;
+
+            }
+        }
+
+        // Add edge, but don't duplicate if exists
+        if (graph.searchEdge(nodes[id], nodes[other_id]) == nullptr){
+            auto edge = graph.newEdge(nodes[id], nodes[other_id]);
+            graph_attributes.strokeColor(edge) = edge_color;
+            graph_attributes.strokeWidth(edge) = 0.3;
+        }
+    }
+}
+
+
+
+void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path output_path) {
     path output_directory = output_path.parent_path();
     create_directories(output_directory);
 
@@ -512,18 +640,26 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
     RegionalOverlapMap overlap_map;
     Graph overlap_graph;
     vector<node> nodes;
-    nodes.resize(max_id+1, nullptr);
+    nodes.resize(max_id + 1, nullptr);
 
-    uint32_t min_quality = 10;
+    uint32_t min_quality = 50;
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
-    vector <vector <PafElement> > paf_table;
-    paf_table.resize(max_id+1);
+    vector<vector<PafElement> > paf_table;
+    paf_table.resize(max_id + 1);
     load_paf_as_table(paf_path, id_vs_name, paf_table);
 
     write_labelled_alignment_info(info_csv_path, output_path, overlap_graph, nodes, paf_table);
 
-    write_graph_to_svg(overlap_graph, nodes, id_vs_name, "test_label_alignment_info.svg");
+    GraphAttributes graph_attributes;
+    assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
+//    assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name);
+
+    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph.svg");
+
+    add_false_positive_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
+
+    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph_with_fp.svg");
 }
 
 
