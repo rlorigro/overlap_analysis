@@ -525,7 +525,7 @@ void find_shasta_false_positives(
         Graph& overlap_graph,
         vector<node>& nodes,
         vector <vector <PafElement> >& paf_table,
-        vector <pair <uint32_t, uint32_t> >& false_positives){
+        set <pair <uint32_t, uint32_t> >& false_positives){
 
     ifstream csv_file(info_csv_path);
 
@@ -533,7 +533,6 @@ void find_shasta_false_positives(
         throw runtime_error("ERROR: could not open input file: " + info_csv_path.string());
     }
 
-    string line;
     string token;
     string region_name;
     uint32_t read_id1;
@@ -544,9 +543,6 @@ void find_shasta_false_positives(
     char c;
 
     while (csv_file.get(c)) {
-        // Dump every character into the line string
-        line += c;
-
         if (c == ',') {
             if (n_lines == 0){
                 continue;
@@ -563,17 +559,77 @@ void find_shasta_false_positives(
             n_delimiters++;
         }
         else if (c == '\n'){
-            // Write header or append the line
+            // Check if the overlap is 0, if so, it is a false positive (in Shasta alignments but not in ref alignments)
             if (n_lines > 0){
                 uint32_t overlap_size = compute_overlap(read_id1, read_id2, overlap_graph, nodes, paf_table);
 
                 if (overlap_size == 0){
-                    false_positives.emplace_back(read_id1, read_id2);
+                    false_positives.emplace(read_id1, read_id2);
+                    cerr << read_id1 << "->" << read_id2 << '\n';
                 }
             }
 
             token.resize(0);
-            line.resize(0);
+            n_delimiters = 0;
+            n_lines++;
+        }
+        else {
+            // Update the token if not a delimiter or newline char (i.e. not whitespace)
+            token += c;
+        }
+    }
+}
+
+/// readId0,readId1,isSameStrand,minAlignedFraction,markerCount,maxDrift,maxSkip,trim,inReadGraph
+void find_shasta_read_graph_edges(
+        path info_csv_path,
+        Graph& overlap_graph,
+        vector<node>& nodes,
+        vector <vector <PafElement> >& paf_table,
+        set <pair <uint32_t, uint32_t> >& read_graph_edges){
+    ifstream csv_file(info_csv_path);
+
+    if (not csv_file.good()){
+        throw runtime_error("ERROR: could not open input file: " + info_csv_path.string());
+    }
+
+    string token;
+    string region_name;
+    uint32_t read_id1;
+    uint32_t read_id2;
+    bool in_read_graph;
+
+    uint64_t n_delimiters = 0;
+    uint64_t n_lines = 0;
+    char c;
+
+    while (csv_file.get(c)) {
+        if (c == ',') {
+            if (n_lines == 0){
+                continue;
+            }
+
+            if (n_delimiters == 0) {
+                read_id1 = stoi(token);
+            }
+            if (n_delimiters == 1) {
+                read_id2 = stoi(token);
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            if (n_delimiters == 8) {
+                in_read_graph = bool(stoi(token));
+            }
+
+            if (in_read_graph) {
+                read_graph_edges.emplace(read_id1, read_id2);
+                cerr << read_id1 << "->" << read_id2 << '\n';
+            }
+
+            token.resize(0);
             n_delimiters = 0;
             n_lines++;
         }
@@ -594,9 +650,10 @@ void add_false_positive_edges_to_graph(
         uint32_string_bimap id_vs_name
         ){
 
+    // Orange
     ogdf::Color edge_color(255,103,0,255);
 
-    vector <pair <uint32_t, uint32_t> > false_positives;
+    set <pair <uint32_t, uint32_t> > false_positives;
     find_shasta_false_positives(
             info_csv_path,
             graph,
@@ -618,15 +675,78 @@ void add_false_positive_edges_to_graph(
             }
         }
 
+        ogdf::EdgeElement* edge = nullptr;
+
         // Add edge, but don't duplicate if exists
         if (graph.searchEdge(nodes[id], nodes[other_id]) == nullptr){
-            auto edge = graph.newEdge(nodes[id], nodes[other_id]);
-            graph_attributes.strokeColor(edge) = edge_color;
-            graph_attributes.strokeWidth(edge) = 0.3;
+            edge = graph.newEdge(nodes[id], nodes[other_id]);
         }
+        else{
+            throw runtime_error("ERROR: edge with 0 overlap exists in reference graph already: " + to_string(id) + "->" + to_string(other_id));
+        }
+
+        graph_attributes.strokeColor(edge) = edge_color;
+        graph_attributes.strokeWidth(edge) = 0.3;
     }
 }
 
+
+void add_read_graph_edges_to_graph(
+        path info_csv_path,
+        Graph& graph,
+        GraphAttributes& graph_attributes,
+        vector<node>& nodes,
+        vector <vector <PafElement> >& paf_table,
+        uint32_string_bimap id_vs_name
+){
+
+    // Blue
+    ogdf::Color in_both_color(16,82,187,255);
+
+    // Teal
+    ogdf::Color read_graph_only_color(0,181,151,255);
+
+    ogdf::Color color;
+
+    set <pair <uint32_t, uint32_t> > read_graph_edges;
+    find_shasta_read_graph_edges(
+            info_csv_path,
+            graph,
+            nodes,
+            paf_table,
+            read_graph_edges);
+
+    for (auto& [id, other_id]: read_graph_edges){
+
+        // Node may have never been created if its only alignment was filtered out of the PAF
+        for (auto i: {id, other_id}) {
+            if (nodes[i] == nullptr) {
+                nodes[i] = graph.newNode();
+
+                graph_attributes.shape(nodes[i]) = ogdf::Shape::Ellipse;
+                graph_attributes.width(nodes[i]) = 8;
+                graph_attributes.height(nodes[i]) = 8;
+
+            }
+        }
+
+        auto edge = graph.searchEdge(nodes[id], nodes[other_id]);
+
+        // If the edge exists already, it needs to be removed and readded to put it on top of the SVG (sadly)
+        if (edge != nullptr){
+            graph.delEdge(edge);
+            color = in_both_color;
+        }
+        else{
+            color = read_graph_only_color;
+        }
+        edge = graph.newEdge(nodes[id], nodes[other_id]);
+
+
+        graph_attributes.strokeColor(edge) = color;
+        graph_attributes.strokeWidth(edge) = 0.3;
+    }
+}
 
 
 void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path output_path) {
@@ -657,9 +777,10 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
 
     write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph.svg");
 
-    add_false_positive_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
+//    add_false_positive_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
+    add_read_graph_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
 
-    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph_with_fp.svg");
+    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph_with_readgraph_edges.svg");
 }
 
 
