@@ -15,14 +15,11 @@ message(STATUS "CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_CXX_FLAGS "-fsanitize=address")
+set(CMAKE_CXX_FLAGS )
 #set(ASAN_OPTIONS=check_initialization_order=1)
 #set(ASAN_OPTIONS=detect_leaks=1)
 
-set(CMAKE_CXX_FLAGS "-fexceptions")
-
-# Needed to run Boost <v1.64 on c++17, (consider upgrading boost?)
-set(CMAKE_CXX_FLAGS "-fno-new-ttp-matching")
+set(CMAKE_CXX_FLAGS "-fno-new-ttp-matching -fsanitize=address -fexceptions")
 
 add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
 #add_definitions(-O3 -Wall)              # Much optimization
@@ -55,6 +52,7 @@ set(SOURCES
         src/OverlapMap.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
+        src/graph_utils.cpp
         src/PafElement.cpp
         src/SequenceElement.cpp
         src/RunlengthSequenceElement.cpp
@@ -129,49 +127,49 @@ message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
 # --------------- networkit ---------------- #
 # ------------------------------------------ #
 ##############################################
-
-# Download or update library as an external project
-ExternalProject_Add(project_networkit
-        GIT_REPOSITORY https://github.com/networkit/networkit.git
-        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/
-        DOWNLOAD_COMMAND ""
-        UPDATE_COMMAND ""
-        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/networkit/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/networkit/lib
-        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/networkit/stamp/
-#        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/networkit/src/
-        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/networkit/build/
-        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/networkit/
-        INSTALL_COMMAND make install
-        )
-
-# Define INSTALL_DIR as the install directory for external library
-ExternalProject_Get_Property(project_networkit INSTALL_DIR)
-
-# Create new library for external project (so it can be linked with main library)
-add_library(networkit SHARED IMPORTED)
-set_property(TARGET networkit
-        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libnetworkit.so)
-
-add_library(tlx STATIC IMPORTED)
-set_property(TARGET tlx
-        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libtlx.a)
-
-# Define main library as dependent on the downloaded project (transitively)
-add_dependencies(networkit
-        project_networkit
-        tlx)
-
-add_dependencies(overlap_analysis networkit)
-
-# Ensure that main library has access to primary dependencies' and secondary dependencies' headers
-include_directories(external/networkit/include/)
-
-# Add runtime path for main library so it can access external library
-#set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/networkit")
-
-message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
-
-
+#
+## Download or update library as an external project
+#ExternalProject_Add(project_networkit
+#        GIT_REPOSITORY https://github.com/networkit/networkit.git
+#        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/
+#        DOWNLOAD_COMMAND ""
+#        UPDATE_COMMAND ""
+#        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/networkit/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/networkit/lib
+#        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/networkit/stamp/
+##        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/networkit/src/
+#        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/networkit/build/
+#        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/networkit/
+#        INSTALL_COMMAND make install
+#        )
+#
+## Define INSTALL_DIR as the install directory for external library
+#ExternalProject_Get_Property(project_networkit INSTALL_DIR)
+#
+## Create new library for external project (so it can be linked with main library)
+#add_library(networkit SHARED IMPORTED)
+#set_property(TARGET networkit
+#        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libnetworkit.so)
+#
+#add_library(tlx STATIC IMPORTED)
+#set_property(TARGET tlx
+#        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libtlx.a)
+#
+## Define main library as dependent on the downloaded project (transitively)
+#add_dependencies(networkit
+#        project_networkit
+#        tlx)
+#
+#add_dependencies(overlap_analysis networkit)
+#
+## Ensure that main library has access to primary dependencies' and secondary dependencies' headers
+#include_directories(external/networkit/include/)
+#
+## Add runtime path for main library so it can access external library
+##set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/networkit")
+#
+#message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
+#
+#
 
 ############################################
 # ---------------------------------------- #
@@ -195,12 +193,11 @@ include_directories( ${Boost_INCLUDE_DIR} )
 set(TESTS
         test_boost_interval_map
         test_ogdf
-        test_networkit
+#        test_networkit
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
     add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
-    set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
     target_link_libraries(${FILENAME_PREFIX}
             overlap_analysis
             Threads::Threads
@@ -208,8 +205,8 @@ foreach(FILENAME_PREFIX ${TESTS})
             stdc++fs
             ogdf
             coin
-            networkit
-            tlx
+#            networkit
+#            tlx
             )
 
 endforeach()
@@ -220,11 +217,12 @@ endforeach()
 set(EXECUTABLES
         fasta_to_RLE_fasta
         label_alignment_info
+        plot_alignment_as_graph
+        plot_alignment_as_double_stranded_graph
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})
     add_executable(${FILENAME_PREFIX} src/executable/${FILENAME_PREFIX}.cpp)
-    set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
     target_link_libraries(${FILENAME_PREFIX}
             overlap_analysis
             Threads::Threads
@@ -232,8 +230,8 @@ foreach(FILENAME_PREFIX ${EXECUTABLES})
             stdc++fs
             ogdf
             coin
-            networkit
-            tlx
+#            networkit
+#            tlx
             )
 endforeach()
 

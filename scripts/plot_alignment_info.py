@@ -68,6 +68,9 @@ def main(csv_path):
                 y_true_frequencies, _ = numpy.histogram(y_true, bins=bins)
                 y_false_frequencies, _ = numpy.histogram(y_false, bins=bins)
 
+                # y_true_frequencies = numpy.log10(y_true_frequencies)
+                # y_false_frequencies = numpy.log10(y_false_frequencies)
+
                 x = bins[:-1] + (step/2)
 
                 axes[i][j].plot(x, y_true_frequencies, color=true_color, linewidth=0.2)

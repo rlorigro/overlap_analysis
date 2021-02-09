@@ -147,7 +147,7 @@ path runlength_encode_fasta_file(path input_file_path,
 
     path output_file_path = output_dir / output_filename;
 
-    cerr << "READING FILE: " << input_file_path.string() << "\n";
+//    cerr << "READING FILE: " << input_file_path.string() << "\n";
     cerr << "WRITING FILE: " << output_file_path.string() << "\n";
 
     // This reader is used to fetch an index

@@ -1,5 +1,6 @@
 #include "OverlapMap.hpp"
 #include "PafElement.hpp"
+#include "graph_utils.hpp"
 
 #include "boost/program_options.hpp"
 #include "boost/bimap.hpp"
@@ -251,6 +252,10 @@ void load_paf_as_graph(
             n_delimiters++;
         }
         else if (c == '\n'){
+            if (n_delimiters < 11){
+                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF");
+            }
+
             token.resize(0);
             n_delimiters = 0;
             n_lines++;
@@ -261,73 +266,6 @@ void load_paf_as_graph(
     }
 
     create_graph_edges_from_overlap_map(overlap_map, graph, nodes);
-}
-
-
-void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes){
-    graph_attributes = GraphAttributes(
-            graph,
-            GraphAttributes::nodeGraphics |
-            GraphAttributes::edgeGraphics |
-            GraphAttributes::edgeStyle |
-            GraphAttributes::nodeStyle |
-            GraphAttributes::nodeTemplate);
-
-    uint32_t node_diameter = 8;
-    ogdf::Color edge_color(20, 20, 20, 255);
-
-    for (auto node: graph.nodes){
-        if (node == nullptr){
-            continue;
-        }
-
-        graph_attributes.shape(node) = ogdf::Shape::Ellipse;
-        graph_attributes.width(node) = node_diameter;
-        graph_attributes.height(node) = node_diameter;
-    }
-
-    for (auto edge: graph.edges){
-        graph_attributes.strokeColor(edge) = edge_color;
-        graph_attributes.strokeWidth(edge) = 0.3;
-    }
-
-}
-
-
-void assign_graph_node_labels(
-        Graph& graph,
-        GraphAttributes& graph_attributes,
-        vector<node>& nodes,
-        uint32_string_bimap& id_vs_name
-        ){
-
-    graph_attributes.addAttributes(GraphAttributes::nodeLabel);
-
-    for (size_t id=0; id<nodes.size(); id++){
-        if (nodes[id] == nullptr){
-            continue;
-        }
-
-        graph_attributes.label(nodes[id]) = id_vs_name.left.at(id);
-    }
-}
-
-
-void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path output_path){
-
-    FMMMLayout layout_engine;
-    layout_engine.useHighLevelOptions(true);
-    layout_engine.unitEdgeLength(40.0);
-    layout_engine.newInitialPlacement(true);
-    layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
-
-    cerr << layout_engine.springStrength() << '\n';
-
-    layout_engine.call(graph_attributes);
-
-    graph_attributes.directed() = false;
-    ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
-
 }
 
 
@@ -732,7 +670,7 @@ void add_read_graph_edges_to_graph(
 
         auto edge = graph.searchEdge(nodes[id], nodes[other_id]);
 
-        // If the edge exists already, it needs to be removed and readded to put it on top of the SVG (sadly)
+        // If the edge exists already, it needs to be removed and re-added to put it on top of the SVG (sadly)
         if (edge != nullptr){
             graph.delEdge(edge);
             color = in_both_color;
