@@ -82,13 +82,13 @@ include(ExternalProject)
 # Download or update library as an external project
 ExternalProject_Add(project_ogdf
         GIT_REPOSITORY https://github.com/ogdf/ogdf.git
-        PREFIX ${CMAKE_SOURCE_DIR}/external/
-        DOWNLOAD_COMMAND ""
-        UPDATE_COMMAND ""
+        PREFIX ${CMAKE_SOURCE_DIR}/external/ogdf
+#        DOWNLOAD_COMMAND ""
+#        UPDATE_COMMAND ""
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/ogdf/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/ogdf/lib
-        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/stamp/
-#        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/src/
-        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/build/
+        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/stamp
+#        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/src
+        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/build
         INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/ogdf/
         INSTALL_COMMAND make install
         )
