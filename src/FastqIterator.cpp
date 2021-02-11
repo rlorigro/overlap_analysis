@@ -37,8 +37,9 @@ bool FastqIterator::next_fastq_element(FastqElement& element){
 
     element = {};
 
-    // Get name
+    // Get name (trim delimiter)
     getline(file, element.name);
+    element.name = element.name.substr(1,element.name.size()-1);
 
     if (file.eof()){
         throw runtime_error("Error: FASTQ file terminates early: " + file_path.string());
