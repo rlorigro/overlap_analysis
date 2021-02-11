@@ -71,12 +71,15 @@ int main(int argc, char **argv){
     FastqElement e;
     vector<FastqElement> result;
 
-//    size_t i = 0;
-    while (iterator.next_fastq_element(e)){
-//        cout << ++i << " " << e.name << '\n';
+    size_t i = 0;
+    while (iterator.next_fastq_element(e)) {
+        if (i % 1000 == 0) {
+            cerr << "\33[2K\r" << ++i << std::flush;
+        }
 
         split_palindrome_by_quality(e, result);
     }
+    cerr << '\n';
 
     return 0;
 }
