@@ -52,6 +52,7 @@ set(SOURCES
         src/OverlapMap.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
+        src/FastqIterator.cpp
         src/graph_utils.cpp
         src/PafElement.cpp
         src/SequenceElement.cpp
@@ -219,6 +220,7 @@ set(EXECUTABLES
         label_alignment_info
         plot_alignment_as_graph
         plot_alignment_as_double_stranded_graph
+        split_palindromes_by_quality
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})

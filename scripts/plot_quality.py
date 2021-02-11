@@ -1,4 +1,5 @@
 from matplotlib import pyplot
+import ruptures
 import scipy.stats
 import random
 import numpy
@@ -37,9 +38,24 @@ def plot_fastq(fastq_path, axes, n_reads, column=None):
                 # print(smoothed_qualities[:10])
 
                 print(n, column)
-                max_breakpoint = optimal_partition(smoothed_qualities)
 
-                print("Breakpoint: ", max_breakpoint)
+                # max_breakpoint = optimal_partition(smoothed_qualities)
+                # print("Breakpoint: ", max_breakpoint)
+
+                model = "l1"  # "l2", "rbf"
+
+                # PELT
+                # algo = ruptures.Pelt(model=model, min_size=100, jump=250).fit(smoothed_qualities)
+                # breakpoints = algo.predict(pen=200)
+
+                # BinSeg
+                # dimensions = 1      # Dimensionality of data
+                # sigma = 0.01        # Noise level (stddev)
+                # penalty = numpy.log(n)*dimensions*sigma**2
+                # algo = ruptures.Binseg(model=model, min_size=1000, jump=250).fit(smoothed_qualities)
+                # breakpoints = algo.predict(pen=200)
+
+                # print(breakpoints)
 
                 axis = None
                 if column is None:
@@ -47,12 +63,17 @@ def plot_fastq(fastq_path, axes, n_reads, column=None):
                 else:
                     axis = axes[n-1][column]
 
-                # axis.plot(smoothed_qualities)
+                axis.plot(smoothed_qualities)
+
+                # axis.legend([name])
 
                 axis.set_ylim([0,0.5])
 
-                if max_breakpoint.t is not None:
-                    axis.axvline(max_breakpoint.t, color="orange")
+                # if max_breakpoint.t is not None:
+                #     axis.axvline(max_breakpoint.t, color="orange")
+
+                # for x in breakpoints:
+                #     axis.axvline(x, color="orange")
 
                 if n == n_reads:
                     break
@@ -105,7 +126,7 @@ def scan_breakpoints(x, step_size, beta):
 
 def optimal_partition(x):
     beta = 10
-    step_size = 500
+    step_size = 250
 
     breakpoints = scan_breakpoints(x, beta=beta, step_size=step_size)
 
@@ -183,7 +204,7 @@ def main():
             if l % 4 == 0:
                 n_reads_b += 1
 
-    n_reads = min(n_reads_a, n_reads_b)
+    n_reads = max(n_reads_a, n_reads_b)
 
     figure,axes = pyplot.subplots(nrows=n_reads, ncols=2)
     figure.set_size_inches(12,6)
@@ -201,8 +222,8 @@ def main():
     axes[0][0].set_title("Cross-strand Reads")
     axes[0][1].set_title("Random Reads")
 
-    # pyplot.show()
-    # pyplot.close()
+    pyplot.show()
+    pyplot.close()
 
 
 if __name__ == "__main__":
