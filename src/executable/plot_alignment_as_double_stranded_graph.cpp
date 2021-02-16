@@ -24,19 +24,23 @@ using ogdf::FMMMOptions;
 using ogdf::Shape;
 
 #include <experimental/filesystem>
+#include <unordered_map>
 #include <iostream>
 #include <utility>
 #include <string>
 #include <vector>
+#include <queue>
 
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::path;
 using std::runtime_error;
+using std::unordered_map;
 using std::ifstream;
 using std::ofstream;
 using std::to_string;
 using std::string;
 using std::vector;
+using std::queue;
 using std::pair;
 using std::cerr;
 using std::cout;
@@ -87,14 +91,14 @@ void create_graph_edges_from_overlap_map(
         auto& prev_read_set = empty_set;
 
         for (auto i = begin(overlaps), e = end(overlaps); i!=e; ++i){
-            const auto& interval = i->first;
+//            const auto& interval = i->first;
             auto& read_set = i->second;
 
-            cerr << interval << " -> ";
-            for (const auto& id: read_set){
-                cerr << id << " " ;
-            }
-            cerr << '\n';
+//            cerr << interval << " -> ";
+//            for (const auto& id: read_set){
+//                cerr << id << " " ;
+//            }
+//            cerr << '\n';
 
             for (const auto& id: read_set){
                 // If this read id is not in the previous set, it indicates that more edges need to be built
@@ -103,7 +107,7 @@ void create_graph_edges_from_overlap_map(
                         if (other_id != id){
                             // Don't duplicate edges
                             if (graph.searchEdge(nodes[id], nodes[other_id]) == nullptr){
-                                cerr << "Creating edge: " << id << "->" << other_id << '\n';
+//                                cerr << "Creating edge: " << id << "->" << other_id << '\n';
 
                                 uint32_t flipped_id;
                                 uint32_t flipped_other_id;
@@ -129,12 +133,12 @@ void create_graph_edges_from_overlap_map(
                     }
                 }
             }
-            cerr << '\n';
+//            cerr << '\n';
 
             prev_read_set = read_set;
         }
     }
-    cerr << '\n';
+//    cerr << '\n';
 
 }
 
@@ -196,7 +200,7 @@ void load_paf_as_graph(
             else if (n_delimiters == 11) {
                 quality = stoi(token);
 
-                cerr << region_name << " " << start << " " << stop << '\n';
+//                cerr << region_name << " " << start << " " << stop << '\n';
 
                 if (quality >= min_quality) {
                     auto result = id_vs_name.right.find(read_name);
@@ -230,6 +234,7 @@ void load_paf_as_graph(
                     if (reverse_id >= nodes.size()){
                         // Forward
                         nodes.emplace_back(graph.newNode());
+
                         // Reverse
                         nodes.emplace_back(graph.newNode());
                     }
@@ -257,7 +262,157 @@ void load_paf_as_graph(
 }
 
 
-void plot_graph(path paf_path, uint32_t min_quality) {
+void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads){
+    ifstream file(excluded_reads_path);
+    string line;
+
+    while(getline(file,line)){
+        excluded_reads.emplace(line.substr(0,line.size()-1));
+    }
+}
+
+
+void exclude_reads_from_graph(
+        Graph& graph,
+        vector<node>& nodes,
+        path excluded_reads_path,
+        uint32_string_bimap id_vs_name
+){
+    set<string> excluded_reads;
+    load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
+
+    for (size_t id=0; id<nodes.size(); id++){
+        if (nodes[id] != nullptr){
+            auto result = id_vs_name.left.find(id);
+
+            if (result == id_vs_name.left.end()){
+                continue;
+            }
+
+            if (excluded_reads.count(result->second) > 0) {
+                graph.delNode(nodes[id]);
+            }
+        }
+    }
+}
+
+
+void create_subgraph(
+        const Graph& graph,
+        Graph& subgraph,
+        uint32_string_bimap& id_vs_name,
+        uint32_string_bimap& subgraph_id_vs_name,
+        vector<node>& nodes,
+        vector<node>& subgraph_nodes,
+        string start_name,
+        uint32_t radius){
+
+    cerr << "Extracting subgraph of radius " << radius << " around node " << start_name << '\n';
+
+    uint32_t start_id;
+    auto result = id_vs_name.right.find(start_name);
+
+    if (result == id_vs_name.right.end()){
+        throw runtime_error("ERROR: subgraph start node " + start_name + " not found in graph");
+    }
+    else{
+        start_id = result->second;
+    }
+
+    uint32_t forward_start_id = 2*start_id;
+    uint32_t reverse_start_id = 2*start_id + 1;
+
+    queue <BfsQueueElement> q;
+    unordered_map <size_t, size_t> distance;
+
+    // Make new nodes for the subgraph
+    auto forward_subgraph_start_node = subgraph.newNode();
+    auto reverse_subgraph_start_node = subgraph.newNode();
+
+    // Update the subgraph nodes list and Keep track of the name that the subgraph node should map to
+    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), start_name + '+'));
+    subgraph_nodes.emplace_back(forward_subgraph_start_node);
+
+    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), start_name + '-'));
+    subgraph_nodes.emplace_back(reverse_subgraph_start_node);
+
+    // Initialize the queue and make a new node for the forward and reverse nodes
+    q.emplace(nodes[forward_start_id], forward_subgraph_start_node);
+    q.emplace(nodes[reverse_start_id], reverse_subgraph_start_node);
+
+    // Update the distance map, which serves the double purpose of tracking which nodes are visited.
+    // This map tracks distance in the original graph, using the original IDs.
+    distance[forward_start_id] = 0;
+    distance[reverse_start_id] = 0;
+
+    while (not q.empty()){
+        auto item = q.front();
+
+        q.pop();
+
+        for (auto adjacent_element: item.original_node->adjEntries){
+            node other = adjacent_element->twinNode();
+            auto d = distance.at(item.original_node->index());
+
+            // If this node's distance would be <= radius, do the update
+            if (d < radius) {
+                uint32_t single_stranded_id = (other->index() - (other->index() % 2)) / 2;
+
+                // Find the name that corresponded to this node in the original graph
+                string name = id_vs_name.left.at(single_stranded_id);
+
+                // Create a directionally labeled name, because these nodes will be randomly ordered
+                // and their ID cant indicate strandedness
+                string subgraph_name = name + ((other->index() % 2 > 0)? "-" : "+");
+
+                cerr << "name: " << name << '\n';
+                cerr << "subgraph name: " << subgraph_name << '\n';
+
+                // If it hasn't been visited before, create a new node and a new edge
+                if (distance.count(other->index()) == 0) {
+                    cerr << "queuing " << other->index() << " " << d + 1 << '\n';
+
+                    auto new_node = subgraph.newNode();
+                    subgraph.newEdge(item.subgraph_node, new_node);
+
+                    q.emplace(other, new_node);
+                    distance[other->index()] = d + 1;
+
+                    cerr << "adding to bimap: " << subgraph_name << '\n';
+//                    for (auto& item: subgraph_id_vs_name){
+//                        cerr << '\t' << item.get_left_pair().first << " " << item.get_left_pair().second << '\n';
+//                    }
+
+                    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), subgraph_name));
+                    subgraph_nodes.emplace_back(new_node);
+                }
+                // If it has been visited, just create a new edge
+                else{
+                    cerr << "matching subgraph id to name: " << subgraph_name << '\n';
+                    uint32_t id = subgraph_id_vs_name.right.at(subgraph_name);
+
+                    node a = item.subgraph_node;
+                    node b = subgraph_nodes[id];
+
+                    if (subgraph.searchEdge(a, b) == nullptr){
+                        subgraph.newEdge(a, b);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+void plot_graph(
+        path paf_path,
+        uint32_t min_quality,
+        path excluded_reads_path,
+        string subgraph_node_name,
+        uint32_t subgraph_radius) {
+
+    bool double_stranded_labeling = true;
+
     path output_directory = paf_path.parent_path();
     create_directories(output_directory);
 
@@ -269,29 +424,107 @@ void plot_graph(path paf_path, uint32_t min_quality) {
 
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
-    vector<vector<PafElement> > paf_table;
+    if (not excluded_reads_path.empty()){
+        exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name);
+    }
+
+    if (not subgraph_node_name.empty()){
+        Graph subgraph;
+        uint32_string_bimap subgraph_id_vs_name;
+        vector<node> subgraph_nodes;
+
+        create_subgraph(
+            overlap_graph,
+            subgraph,
+            id_vs_name,
+            subgraph_id_vs_name,
+            nodes,
+            subgraph_nodes,
+            subgraph_node_name,
+            subgraph_radius);
+
+        overlap_graph = subgraph;
+        nodes = subgraph_nodes;
+        id_vs_name = subgraph_id_vs_name;
+
+        double_stranded_labeling = false;
+    }
 
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
-    assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, true);
+    assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
 
     write_graph_to_svg(overlap_graph, graph_attributes, paf_path.replace_extension("double_stranded.svg"));
 }
 
 
+pair<string, uint32_t> parse_subgraph_argument(string subgraph_argument){
+    char delimiter = ':';
+    string token;
+    string name;
+    uint32_t radius;
+
+    size_t n_delimiters = 0;
+
+    for (size_t i=0; i<subgraph_argument.size(); i++){
+        char c = subgraph_argument[i];
+
+        if (c == delimiter) {
+            if (n_delimiters == 0) {
+                name = token;
+                token.clear();
+                n_delimiters++;
+            }
+            else{
+                throw runtime_error("ERROR: subgraph argument has too many ':' delimiters: " + subgraph_argument);
+            }
+        }
+        else {
+            token += c;
+        }
+    }
+
+    if (n_delimiters != 1){
+        throw runtime_error("ERROR: subgraph argument has no ':' delimiters: " + subgraph_argument);
+    }
+
+    radius = stoi(token);
+
+    return {name, radius};
+}
+
+
 int main(int argc, char* argv[]){
     path paf_path;
+    path excluded_reads_path;
     uint32_t min_quality;
+    string subgraph_argument;
+    string subgraph_node_name;
+    uint32_t subgraph_radius;
 
     options_description options("Arguments:");
 
     options.add_options()
             ("paf_path",
-             value<path>(&paf_path)->required(),
+             value<path>(&paf_path)
+             ->required(),
              "File path of PAF file containing alignments to some reference")
+
             ("mapq",
-            value<uint32_t>(&min_quality)->required()->default_value(50),
+            value<uint32_t>(&min_quality)
+            ->required()
+            ->default_value(50),
             "Minimum allowed mapping quality to load into the graph")
+
+            ("exclude",
+             value<path>(&excluded_reads_path)
+             ->default_value(""),
+             "File path of PAF file containing alignments to some reference")
+
+            ("subgraph",
+             value<string>(&subgraph_argument)
+             ->default_value(""),
+             "File path of PAF file containing alignments to some reference")
             ;
 
 
@@ -305,7 +538,15 @@ int main(int argc, char* argv[]){
     }
     notify(vm);
 
-    plot_graph(paf_path, min_quality);
+    if (not subgraph_argument.empty()) {
+        tie(subgraph_node_name, subgraph_radius) = parse_subgraph_argument(subgraph_argument);
+    }
+    else{
+        subgraph_node_name = "";
+        subgraph_radius = 0;
+    }
+
+    plot_graph(paf_path, min_quality, excluded_reads_path, subgraph_node_name, subgraph_radius);
 
     return 0;
 }

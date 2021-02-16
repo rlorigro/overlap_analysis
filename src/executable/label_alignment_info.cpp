@@ -145,7 +145,7 @@ void create_graph_edges_from_overlap_map(
         auto& prev_read_set = empty_set;
 
         for (auto i = begin(overlaps), e = end(overlaps); i !=e; ++i){
-            const auto& interval = i->first;
+//            const auto& interval = i->first;
             auto& read_set = i->second;
 
 //            cerr << interval << " -> ";
@@ -535,7 +535,7 @@ void find_shasta_read_graph_edges(
     string region_name;
     uint32_t read_id1;
     uint32_t read_id2;
-    bool in_read_graph;
+    bool in_read_graph = false;
 
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
@@ -687,7 +687,38 @@ void add_read_graph_edges_to_graph(
 }
 
 
-void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path output_path) {
+void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads){
+    ifstream file(excluded_reads_path);
+    string line;
+
+    while(getline(file,line)){
+        excluded_reads.emplace(line.substr(0,line.size()-1));
+    }
+}
+
+
+void exclude_reads_from_graph(
+        Graph& graph,
+        vector<node>& nodes,
+        path excluded_reads_path,
+        uint32_string_bimap id_vs_name
+){
+    set<string> excluded_reads;
+    load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
+
+    for (size_t id=0; id<nodes.size(); id++){
+        if (nodes[id] != nullptr){
+            auto name = id_vs_name.left.at(id);
+
+            if (excluded_reads.count(name) > 0) {
+                graph.delNode(nodes[id]);
+            }
+        }
+    }
+}
+
+
+void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path excluded_reads_path, path output_path) {
     path output_directory = output_path.parent_path();
     create_directories(output_directory);
 
@@ -702,6 +733,10 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
 
     uint32_t min_quality = 50;
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
+
+    if (not excluded_reads_path.empty()){
+        exclude_reads_from_graph(overlap_graph,nodes,excluded_reads_path,id_vs_name);
+    }
 
     vector<vector<PafElement> > paf_table;
     paf_table.resize(max_id + 1);
@@ -726,21 +761,30 @@ int main(int argc, char* argv[]){
     path info_csv_path;
     path read_csv_path;
     path paf_path;
+    path excluded_reads_path;
     path output_path;
 
     options_description options("Arguments:");
 
     options.add_options()
             ("info_csv_path",
-             value<path>(&info_csv_path)->required(),
+             value<path>(&info_csv_path)->
+             required(),
              "File path of CSV alignment info dump created by shasta readGraph.creationMethod 2 with debug mode on")
 
             ("read_csv_path",
-             value<path>(&read_csv_path)->required(),
+             value<path>(&read_csv_path)->
+             required(),
              "File path of CSV file ReadSummary.csv produced by shasta")
 
             ("paf_path",
-             value<path>(&paf_path)->required(),
+             value<path>(&paf_path)->
+             required(),
+             "File path of PAF file containing alignments to some reference")
+
+            ("exclude",
+             value<path>(&excluded_reads_path)->
+             default_value(""),
              "File path of PAF file containing alignments to some reference")
 
             ("output_path",
@@ -758,7 +802,7 @@ int main(int argc, char* argv[]){
     }
     notify(vm);
 
-    label_alignment_info(info_csv_path, read_csv_path, paf_path, output_path);
+    label_alignment_info(info_csv_path, read_csv_path, paf_path, excluded_reads_path, output_path);
 
     return 0;
 }

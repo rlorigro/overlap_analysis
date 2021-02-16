@@ -1,5 +1,10 @@
 #include "graph_utils.hpp"
 
+BfsQueueElement::BfsQueueElement(node original_node, node subgraph_node):
+    original_node(original_node),
+    subgraph_node(subgraph_node)
+{};
+
 
 void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes){
     graph_attributes = GraphAttributes(
@@ -71,7 +76,7 @@ void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path ou
     layout_engine.newInitialPlacement(true);
     layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
 
-    cerr << layout_engine.springStrength() << '\n';
+//    cerr << layout_engine.springStrength() << '\n';
 
     layout_engine.call(graph_attributes);
 

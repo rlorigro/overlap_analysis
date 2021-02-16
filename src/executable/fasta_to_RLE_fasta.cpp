@@ -234,7 +234,7 @@ int main(int argc, char* argv[]){
 
             ("output_dir",
              value<path>(&output_dir)->
-                     default_value("output/"),
+             default_value("output/"),
              "Destination directory. File will be named based on input file name")
 
             ("max_threads",

@@ -47,6 +47,16 @@ typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
 
 
+class BfsQueueElement{
+public:
+    node original_node;
+    node subgraph_node;
+
+    BfsQueueElement()=default;
+    BfsQueueElement(node original_node, node subgraph_node);
+};
+
+
 void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes);
 
 

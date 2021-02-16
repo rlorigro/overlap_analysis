@@ -149,9 +149,9 @@ void load_paf_as_graph(
     string token;
     string region_name;
     string read_name;
-    uint32_t start;
-    uint32_t stop;
-    uint32_t quality;
+    uint32_t start = 0;
+    uint32_t stop = 0;
+    uint32_t quality = 0;
 
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
@@ -233,8 +233,6 @@ void plot_graph(path paf_path, uint32_t min_quality) {
     vector<node> nodes;
 
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
-
-    vector<vector<PafElement> > paf_table;
 
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
