@@ -8,27 +8,6 @@ import sys
 import os
 
 
-def generate_id_to_name_mapping(csv_path):
-    id_to_name = list()
-
-    with open(csv_path, 'r') as file:
-        for l,line in enumerate(file):
-            if l == 0:
-                continue
-
-            data = line.strip().split(',')
-
-            id = int(data[0])
-            name = data[1]
-
-            if len(id_to_name) <= id:
-                id_to_name.extend([None]*(len(id_to_name) - id + 1))
-
-            id_to_name[id] = name
-
-    return id_to_name
-
-
 def load_query_ids(query_ids_path):
     ids = list()
     with open(query_ids_path, 'r') as file:
@@ -38,10 +17,8 @@ def load_query_ids(query_ids_path):
     return ids
 
 
-def main(csv_path, fastq_path, query_ids_path):
-    faidx_path = fastq_path + ".fai"
-
-    id_to_name = generate_id_to_name_mapping(csv_path=csv_path)
+def main(fastq_path, query_ids_path):
+    faidx_path = build_index(fastq_path)
 
     name_to_offset, index_elements = load_fastq_index(faidx_path=faidx_path)
 
@@ -53,12 +30,7 @@ def main(csv_path, fastq_path, query_ids_path):
     with open(fastq_path, 'rb') as input_file, open(output_path, 'wb') as output_file:
         mm = mmap.mmap(input_file.fileno(), 0, prot=mmap.PROT_READ)
 
-        for id in queries:
-            if id >= len(id_to_name):
-                sys.stderr.write("WARNING: skipping id " + str(id) + " because it is greater than max id in shasta ReadSummary.csv\n")
-                continue
-
-            name = id_to_name[id]
+        for name in queries:
             offset_index = name_to_offset[name]
             index_element = index_elements[offset_index]
             print(name, index_element)
@@ -94,12 +66,6 @@ if __name__ == "__main__":
         help="path of file containing FASTA/FASTQ sequence"
     )
     parser.add_argument(
-        "--summary_csv",
-        type=str,
-        required=True,
-        help="path of ReadSummary.csv containing mapping from readId (shasta) to readName (fastq)"
-    )
-    parser.add_argument(
         "--ids",
         type=str,
         required=True,
@@ -110,6 +76,5 @@ if __name__ == "__main__":
 
     main(
         fastq_path=args.fastq,
-        csv_path=args.summary_csv,
         query_ids_path=args.ids,
     )
