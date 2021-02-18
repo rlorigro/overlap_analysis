@@ -49,8 +49,8 @@ void split_palindrome_by_quality(FastqElement& element, vector<FastqElement>& re
 //    cout << left_mean << '\t' << left_variance << '\n';
 //    cout << right_mean << '\t' << right_variance << '\n';
 
-    if (right_mean - left_mean > 0.09 and right_mean >= 0.15){
-        if (right_variance > left_variance and right_variance > 0.025){
+    if (not (right_mean - left_mean > 0.09 and right_mean >= 0.15)){
+        if (not (right_variance > left_variance and right_variance > 0.025)){
             cout << '@' << element.name << '\n';
             cout << element.sequence << '\n';
             cout << '+' << '\n';

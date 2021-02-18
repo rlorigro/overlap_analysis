@@ -365,12 +365,8 @@ void create_subgraph(
                 // and their ID cant indicate strandedness
                 string subgraph_name = name + ((other->index() % 2 > 0)? "-" : "+");
 
-                cerr << "name: " << name << '\n';
-                cerr << "subgraph name: " << subgraph_name << '\n';
-
                 // If it hasn't been visited before, create a new node and a new edge
                 if (distance.count(other->index()) == 0) {
-                    cerr << "queuing " << other->index() << " " << d + 1 << '\n';
 
                     auto new_node = subgraph.newNode();
                     subgraph.newEdge(item.subgraph_node, new_node);
@@ -378,17 +374,11 @@ void create_subgraph(
                     q.emplace(other, new_node);
                     distance[other->index()] = d + 1;
 
-                    cerr << "adding to bimap: " << subgraph_name << '\n';
-//                    for (auto& item: subgraph_id_vs_name){
-//                        cerr << '\t' << item.get_left_pair().first << " " << item.get_left_pair().second << '\n';
-//                    }
-
                     subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), subgraph_name));
                     subgraph_nodes.emplace_back(new_node);
                 }
                 // If it has been visited, just create a new edge
                 else{
-                    cerr << "matching subgraph id to name: " << subgraph_name << '\n';
                     uint32_t id = subgraph_id_vs_name.right.at(subgraph_name);
 
                     node a = item.subgraph_node;
