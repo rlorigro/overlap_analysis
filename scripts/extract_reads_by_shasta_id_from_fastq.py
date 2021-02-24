@@ -1,6 +1,5 @@
 from modules.Fastq import *
 
-from subprocess import run
 import argparse
 import struct
 import mmap

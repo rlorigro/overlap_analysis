@@ -7,6 +7,7 @@
 
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
+using boost::program_options::bool_switch;
 using boost::program_options::value;
 using boost::bimap;
 
@@ -398,6 +399,7 @@ void plot_graph(
         path paf_path,
         uint32_t min_quality,
         path excluded_reads_path,
+        bool label_nodes,
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
@@ -442,7 +444,10 @@ void plot_graph(
 
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
-    assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
+
+    if (label_nodes) {
+        assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
+    }
 
     write_graph_to_svg(overlap_graph, graph_attributes, paf_path.replace_extension("double_stranded.svg"));
 }
@@ -488,6 +493,7 @@ int main(int argc, char* argv[]){
     path paf_path;
     path excluded_reads_path;
     uint32_t min_quality;
+    bool label_nodes;
     string subgraph_argument;
     string subgraph_node_name;
     uint32_t subgraph_radius;
@@ -510,6 +516,10 @@ int main(int argc, char* argv[]){
              value<path>(&excluded_reads_path)
              ->default_value(""),
              "File path of PAF file containing alignments to some reference")
+
+            ("label,l",
+             bool_switch(&label_nodes),
+             "Invoke this argument to draw labels on the output svg")
 
             ("subgraph",
              value<string>(&subgraph_argument)
@@ -536,7 +546,7 @@ int main(int argc, char* argv[]){
         subgraph_radius = 0;
     }
 
-    plot_graph(paf_path, min_quality, excluded_reads_path, subgraph_node_name, subgraph_radius);
+    plot_graph(paf_path, min_quality, excluded_reads_path, label_nodes, subgraph_node_name, subgraph_radius);
 
     return 0;
 }

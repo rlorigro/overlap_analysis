@@ -3,3 +3,6 @@ cmake-build-debug/
 build/
 venv/
 external/
+__pycache__
+*/__pycache__/*
+bin/

@@ -81,6 +81,8 @@ void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path ou
     layout_engine.call(graph_attributes);
 
     graph_attributes.directed() = false;
-    ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
 
+    cerr << "Writing svg: " << output_path << '\n';
+
+    ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
 }
