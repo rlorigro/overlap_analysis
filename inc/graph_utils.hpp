@@ -65,7 +65,8 @@ void assign_graph_node_labels(
         GraphAttributes& graph_attributes,
         vector<node>& nodes,
         uint32_string_bimap& id_vs_name,
-        bool double_stranded=false
+        bool double_stranded=false,
+        path output_path=""
 );
 
 void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path output_path);

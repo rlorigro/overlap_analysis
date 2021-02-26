@@ -399,7 +399,7 @@ void plot_graph(
         path paf_path,
         uint32_t min_quality,
         path excluded_reads_path,
-        bool label_nodes,
+        uint8_t label_type,
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
@@ -445,11 +445,19 @@ void plot_graph(
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
 
-    if (label_nodes) {
+    if (label_type == 1) {
         assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
     }
+    else{
+        path label_csv_path = paf_path;
+        label_csv_path.replace_extension("node_names.csv");
+        assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling, label_csv_path);
+    }
 
-    write_graph_to_svg(overlap_graph, graph_attributes, paf_path.replace_extension("double_stranded.svg"));
+    path svg_path = paf_path;
+    svg_path.replace_extension("double_stranded.svg");
+
+    write_graph_to_svg(overlap_graph, graph_attributes, svg_path);
 }
 
 
@@ -493,7 +501,7 @@ int main(int argc, char* argv[]){
     path paf_path;
     path excluded_reads_path;
     uint32_t min_quality;
-    bool label_nodes;
+    uint8_t label_type;
     string subgraph_argument;
     string subgraph_node_name;
     uint32_t subgraph_radius;
@@ -518,8 +526,12 @@ int main(int argc, char* argv[]){
              "File path of PAF file containing alignments to some reference")
 
             ("label,l",
-             bool_switch(&label_nodes),
-             "Invoke this argument to draw labels on the output svg")
+             value<uint8_t>(&label_type)
+             ->default_value(0),
+             "Labelling scheme for nodes:\n"
+             "\t0 - None\n"
+             "\t1 - Original names\n"
+             "\t2 - Numeric")
 
             ("subgraph",
              value<string>(&subgraph_argument)
@@ -546,7 +558,7 @@ int main(int argc, char* argv[]){
         subgraph_radius = 0;
     }
 
-    plot_graph(paf_path, min_quality, excluded_reads_path, label_nodes, subgraph_node_name, subgraph_radius);
+    plot_graph(paf_path, min_quality, excluded_reads_path, label_type, subgraph_node_name, subgraph_radius);
 
     return 0;
 }
