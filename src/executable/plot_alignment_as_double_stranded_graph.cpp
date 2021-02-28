@@ -403,11 +403,13 @@ void plot_graph(
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
-    bool double_stranded_labeling = true;
-
     path output_directory = paf_path.parent_path();
     create_directories(output_directory);
 
+    path svg_path = paf_path;
+    svg_path.replace_extension("double_stranded.svg");
+
+    bool double_stranded_labeling = true;
     uint32_string_bimap id_vs_name;
 
     RegionalOverlapMap overlap_map;
@@ -453,9 +455,6 @@ void plot_graph(
         label_csv_path.replace_extension("node_names.csv");
         assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling, label_csv_path);
     }
-
-    path svg_path = paf_path;
-    svg_path.replace_extension("double_stranded.svg");
 
     write_graph_to_svg(overlap_graph, graph_attributes, svg_path);
 }

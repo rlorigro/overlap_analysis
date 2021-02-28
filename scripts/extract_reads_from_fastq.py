@@ -12,7 +12,7 @@ def load_query_ids(query_ids_path):
     ids = list()
     with open(query_ids_path, 'r') as file:
         for line in file:
-            ids.append(int(line.strip()))
+            ids.append(line.strip())
 
     return ids
 
