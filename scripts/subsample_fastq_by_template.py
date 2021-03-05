@@ -73,6 +73,9 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 
 
 def main(template_path, subsample_path, output_dir, max_bases, min_length, max_reduction_rate, dry_run):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     output_path = os.path.join(output_dir, "output.fastq")
 
     # Allow an fai to be used instead of a full fastq for the template
@@ -99,7 +102,7 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
         if item.length > min_length:
             template_distribution.update(item.length)
 
-    # Find the length distribution for the file to be subspampled
+    # Find the length distribution for the file to be subsampled
     for item in subsample_index_elements:
         if item.length > min_length:
             subsample_distribution.update(item.length)
