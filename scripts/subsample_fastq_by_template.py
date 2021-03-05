@@ -75,7 +75,12 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 def main(template_path, subsample_path, output_dir, max_bases, min_length, max_reduction_rate, dry_run):
     output_path = os.path.join(output_dir, "output.fastq")
 
-    template_faidx_path = build_index(template_path)
+    # Allow an fai to be used instead of a full fastq for the template
+    if not template_path.endswith(".fai"):
+        template_faidx_path = build_index(template_path)
+    else:
+        template_faidx_path = template_path
+
     subsample_faidx_path = build_index(subsample_path)
 
     template_name_to_offset, template_index_elements = load_fastq_index(faidx_path=template_faidx_path)
@@ -190,13 +195,13 @@ if __name__ == "__main__":
         "--template",
         type=str,
         required=True,
-        help="path of file containing FASTA/FASTQ sequence (attempt to match this distribution)"
+        help="path of FASTQ file, OR .fai file from a FASTQ (attempt to match this distribution)"
     )
     parser.add_argument(
         "--subsample",
         type=str,
         required=True,
-        help="path of file containing FASTA/FASTQ sequence"
+        help="path of file containing FASTQ sequence"
     )
     parser.add_argument(
         "--output_dir",
