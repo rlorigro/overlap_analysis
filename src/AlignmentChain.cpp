@@ -1,0 +1,264 @@
+#include "AlignmentChain.hpp"
+
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <cmath>
+
+
+using std::runtime_error;
+using std::ifstream;
+using std::ofstream;
+using std::ostream;
+using std::to_string;
+using std::string;
+using std::vector;
+using std::sort;
+using std::cerr;
+using std::cout;
+using std::max;
+
+
+
+ChainElement::ChainElement(
+        string& paf_line,
+        string& ref_name,
+        uint32_t ref_start,
+        uint32_t ref_stop,
+        uint32_t query_start,
+        uint32_t query_stop,
+        uint32_t ref_length,
+        bool is_reverse):
+    paf_line(paf_line),
+    ref_name(ref_name),
+    ref_start(ref_start),
+    ref_stop(ref_stop),
+    query_start(query_start),
+    query_stop(query_stop),
+    ref_length(ref_length),
+    is_reverse(is_reverse)
+{}
+
+
+uint32_t ChainElement::distance_to_end_of_contig() const{
+    uint32_t distance;
+
+    if (is_reverse){
+        distance = ref_start;
+    }
+    else{
+        distance = ref_length - ref_stop;
+    }
+
+    return distance;
+}
+
+
+ostream& operator<<(ostream& o, const ChainElement& e){
+    o << '(' << e.query_start << ',' << e.query_stop << ")" << (e.is_reverse ? "-":"+") << " " << e.ref_name << " " << e.ref_start << " " << e.ref_stop << " " << e.ref_length;
+    return o;
+}
+
+
+/// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md
+void AlignmentChains::load_from_paf(path paf_path){
+    ifstream paf_file(paf_path);
+
+    if (not paf_file.good()){
+        throw runtime_error("ERROR: could not open input file: " + paf_path.string());
+    }
+
+    string line;
+
+    while (getline(paf_file, line)){
+        add_alignment(line);
+    }
+}
+
+
+void AlignmentChain::add(ChainElement& e){
+    chain.emplace_back(e);
+}
+
+
+bool parse_reversal_token(string& token){
+    bool is_reverse;
+
+    if (token == "-"){
+        is_reverse = true;
+    }
+    else if (token == "+"){
+        is_reverse = false;
+    }
+    else{
+        throw runtime_error("ERROR: uninterpretable directional symbol is not '-' or '+': " + token);
+    }
+
+    return is_reverse;
+}
+
+
+void AlignmentChains::add_alignment(string line){
+    string token;
+    string region_name;
+    string query_name;
+    uint32_t ref_start;
+    uint32_t ref_stop;
+    uint32_t query_start;
+    uint32_t query_stop;
+    uint32_t ref_length;
+    bool is_reverse;
+
+    uint64_t n_delimiters = 0;
+
+    for (char c: line){
+        if (c == '\t') {
+            if (n_delimiters == 0) {
+                query_name = token;
+            }
+            else if (n_delimiters == 2) {
+                query_start = stoi(token);
+            }
+            else if (n_delimiters == 3) {
+                query_stop = stoi(token);
+            }
+            else if (n_delimiters == 4) {
+                is_reverse = parse_reversal_token(token);
+            }
+            else if (n_delimiters == 5) {
+                region_name = token;
+            }
+            else if (n_delimiters == 6) {
+                ref_length = stoi(token);
+            }
+            else if (n_delimiters == 7) {
+                ref_start = stoi(token);
+            }
+            else if (n_delimiters == 8) {
+                ref_stop = stoi(token);
+
+                ChainElement e(
+                        line,
+                        region_name,
+                        ref_start,
+                        ref_stop,
+                        query_start,
+                        query_stop,
+                        ref_length,
+                        is_reverse);
+
+                chains[query_name].add(e);
+
+                cerr << query_name << " " << e << '\n';
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            if (n_delimiters < 11){
+                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF");
+            }
+
+            token.resize(0);
+            n_delimiters = 0;
+        }
+        else {
+            token += c;
+        }
+    }
+
+}
+
+
+bool compare_chain_elements(ChainElement& a, ChainElement& b){
+    auto midpoint_a = a.query_stop - a.query_start;
+    auto midpoint_b = b.query_stop - b.query_start;
+
+    return midpoint_a < midpoint_b;
+}
+
+
+void AlignmentChain::sort_chain() {
+    sort(chain.begin(), chain.end(), compare_chain_elements);
+}
+
+
+uint32_t AlignmentChain::compute_distance(ChainElement& a, ChainElement& b){
+    uint32_t distance = 0;
+    if (a.ref_name == b.ref_name){
+        // Because minimap2/winnowmap allow supplementaries to overlap, there may be negative distances. Clip them at 0.
+        distance = max(0, int32_t(a.ref_stop) - int32_t(b.ref_start));
+    }
+    else{
+        // If 2 successive alignments are on different contigs, find the minimum possible distance (+gap penalty)
+        int32_t a_to_end = a.distance_to_end_of_contig();
+        int32_t b_to_end = b.distance_to_end_of_contig();
+        distance = a_to_end + b_to_end + gap_penalty;
+    }
+
+    return distance;
+}
+
+
+void AlignmentChain::split(set <pair <size_t, size_t> >& subchain_bounds, pair <size_t, size_t> bounds){
+    // For the first recursion, load the result object
+    if (subchain_bounds.empty()){
+        bounds = {0, chain.size()};
+        subchain_bounds.emplace(bounds);
+    }
+
+    size_t start = bounds.first;
+    size_t stop = bounds.second;
+
+    uint32_t longest_gap = 0;
+    uint32_t gap_index;
+
+    // Iterate and split at largest gap that passes threshold
+    // Assume chains have already been sorted by their midpoints
+    for (size_t i=start; i < stop - 1; i++) {
+        auto gap = compute_distance(chain[i], chain[i+1]);
+
+        if (gap > longest_gap){
+            longest_gap = gap;
+            gap_index = i + 1;
+        }
+    }
+
+    // Split the bounds if this chain contains a sufficiently large gap
+    if (longest_gap > max_gap){
+        subchain_bounds.erase(bounds);
+
+        pair <size_t, size_t> left = {bounds.first, gap_index};
+        pair <size_t, size_t> right = {gap_index, bounds.second};
+
+        subchain_bounds.emplace(left);
+        subchain_bounds.emplace(right);
+
+        // Recur
+        split(subchain_bounds, left);
+        split(subchain_bounds, right);
+    }
+}
+
+
+void AlignmentChains::split_all_chains(){
+    for (auto& [name, chain]: chains) {
+        // Sort by order of occurrence in query (read) sequence
+        chain.sort_chain();
+
+        // Do recursive splitting
+        set <pair <size_t, size_t> > subchain_bounds;
+        chain.split(subchain_bounds);
+
+        cerr << "Subchains created for read " << name << '\n';
+        for (auto& item: subchain_bounds){
+            for (size_t i=item.first; i < item.second; i++) {
+                cerr << '\t' << chain.chain[i] << '\n';
+            }
+            cerr << '\n' << '\n';
+        }
+    }
+}

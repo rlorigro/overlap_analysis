@@ -60,15 +60,17 @@ def build_index(path):
     index_path = path + ".fai"
     if os.path.exists(index_path):
         sys.stderr.write("Index exists\n")
+        sys.stderr.flush()
+
         if os.path.getmtime(index_path) < os.path.getmtime(path):
             sys.stderr.write("WARNING: fasta/q index path is older than file itself, may be out of date: " + index_path + "\n")
     else:
         sys.stderr.write("No index found, indexing... ")
+        sys.stderr.flush()
+
         arguments = ["samtools", "faidx", path]
         run(arguments, check=True)
         sys.stderr.write("Done\n")
-
-    sys.stderr.flush()
 
     return index_path
 

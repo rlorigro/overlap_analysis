@@ -49,6 +49,7 @@ include_directories(
 
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
+        src/AlignmentChain.cpp
         src/OverlapMap.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
@@ -193,6 +194,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 
 set(TESTS
         test_boost_interval_map
+        test_chaining
         test_ogdf
 #        test_networkit
         )
@@ -217,10 +219,11 @@ endforeach()
 
 set(EXECUTABLES
         fasta_to_RLE_fasta
+        filter_chimeras_from_paf
+        filter_palindromes_by_quality
         label_alignment_info
         plot_alignment_as_graph
         plot_alignment_as_double_stranded_graph
-        split_palindromes_by_quality
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})

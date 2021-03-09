@@ -35,7 +35,7 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 
     subsample_rates = [0]*(n_bins)
 
-    print("i\tbin\tratio")
+    sys.stderr.write("i\tbin\tratio\n")
 
     normalized_template_distribution = template_distribution.get_normalized_histogram()
     normalized_subsample_distribution = subsample_distribution.get_normalized_histogram()
@@ -47,7 +47,7 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 
         subsample_rates[i] = ratio
 
-        print(i, bin_edges[i], ratio)
+        sys.stderr.write("%d\t%.2f\t%.2f\n" % (i, bin_edges[i], ratio))
 
     bin_indexes = [i for i in range(len(subsample_rates))]
     subsample_coverages = subsample_distribution.get_normalized_histogram() * subsample_distribution.get_bin_centers()
@@ -55,13 +55,9 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 
     worst_clipped_indexes = sorted(bin_indexes, key=lambda x: template_coverages[x] - subsample_coverages[x], reverse=True)
 
-    print(worst_clipped_indexes[0:10])
-
     # Compute the reduction ratio from an average of the worst bins with a ratio >1 (most clipping)
     reduction_rate = [i for i in worst_clipped_indexes[:20] if i > 1]
     reduction_rate = sum(reduction_rate)/len(reduction_rate) if len(reduction_rate) > 0 else 1
-
-    print(reduction_rate, min(reduction_rate, max_reduction_rate))
 
     reduction_rate = min(reduction_rate, max_reduction_rate)
 
@@ -74,6 +70,7 @@ def compute_subsample_rates(template_distribution, subsample_distribution, n_bin
 
 def main(template_path, subsample_path, output_dir, max_bases, min_length, max_reduction_rate, dry_run):
     if not os.path.exists(output_dir):
+        sys.stderr.write("Creating output dir: %s\n" % output_dir)
         os.makedirs(output_dir)
 
     output_path = os.path.join(output_dir, "output.fastq")
@@ -97,6 +94,9 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
     subsample_distribution = IterativeHistogram(start=start, stop=stop, n_bins=n_bins)
     resulting_distribution = IterativeHistogram(start=start, stop=stop, n_bins=n_bins)
 
+    sys.stderr.write("Counting template and subsample distributions...\n")
+    sys.stderr.flush()
+
     # Find the length distribution for the template file
     for item in template_index_elements:
         if item.length > min_length:
@@ -113,11 +113,15 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
 
     subsample_rates = compute_subsample_rates(template_distribution, subsample_distribution, n_bins, max_reduction_rate)
 
+    sys.stderr.write("Subsampling FASTQ...\n")
     subsampled_bases = 0
     with open(subsample_path, 'rb') as input_file, open(output_path, 'wb') as output_file:
         mm = mmap.mmap(input_file.fileno(), 0, prot=mmap.PROT_READ)
 
         for name, i in subsample_name_to_offset.items():
+            if i % 1000 == 0:
+                sys.stderr.write("\r{:2.1%}".format(i / len(subsample_name_to_offset)))
+
             offset_index = subsample_name_to_offset[name]
             index_element = subsample_index_elements[offset_index]
 
@@ -161,8 +165,10 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
                 output_file.write(b'\n')
 
             if subsampled_bases >= max_bases:
-                print("Stopping because bases sampled (%d) >= max_bases (%d)" % (subsampled_bases, max_bases))
+                sys.stderr.write("Stopping because bases sampled (%d) >= max_bases (%d)\n" % (subsampled_bases, max_bases))
                 break
+
+    sys.stderr.write('\n')
 
     figure = pyplot.figure()
     axes = pyplot.axes()
@@ -174,7 +180,7 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
 
     figure.set_size_inches(16,8)
     axes.legend()
-    print("Saving plot to: " + image_path)
+    sys.stderr.write("Saving plot to: %s\n" % image_path)
     pyplot.savefig(image_path, dpi=200)
 
     figure2 = pyplot.figure()
@@ -187,7 +193,7 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
 
     figure2.set_size_inches(16,8)
     axes2.legend()
-    print("Saving plot to: " + image_path)
+    sys.stderr.write("Saving plot to: %s\n" % image_path)
     pyplot.savefig(image_path, dpi=200)
 
 
@@ -231,8 +237,8 @@ if __name__ == "__main__":
         type=float,
         required=False,
         default=1.5,
-        help="To accommodate certain distributions, it may require scaling down the entire dataset. Set this value to 1"
-             "to completely prevent downscaling, or to choose a number (1,inf) to set the upper limit on reduction rate."
+        help="To accommodate certain distributions, it may require scaling down the entire dataset. Set this value to 1 "
+             "to completely prevent downscaling, or to choose a number (1,inf) to set the upper limit on reduction rate. "
              "Example: r=1.5, then the total coverage may be allowed to reduce by 1/1.5 = 1/3"
     )
     parser.add_argument(

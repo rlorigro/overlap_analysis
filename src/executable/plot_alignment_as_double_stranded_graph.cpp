@@ -399,7 +399,7 @@ void plot_graph(
         path paf_path,
         uint32_t min_quality,
         path excluded_reads_path,
-        uint8_t label_type,
+        uint16_t label_type,
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
@@ -422,6 +422,7 @@ void plot_graph(
         exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name);
     }
 
+    // Do subgraph extraction if a node was provided as a start point for BFS
     if (not subgraph_node_name.empty()){
         Graph subgraph;
         uint32_string_bimap subgraph_id_vs_name;
@@ -500,7 +501,7 @@ int main(int argc, char* argv[]){
     path paf_path;
     path excluded_reads_path;
     uint32_t min_quality;
-    uint8_t label_type;
+    uint16_t label_type;
     string subgraph_argument;
     string subgraph_node_name;
     uint32_t subgraph_radius;
@@ -525,7 +526,7 @@ int main(int argc, char* argv[]){
              "File path of PAF file containing alignments to some reference")
 
             ("label,l",
-             value<uint8_t>(&label_type)
+             value<uint16_t>(&label_type)
              ->default_value(0),
              "Labelling scheme for nodes:\n"
              "\t0 - None\n"
