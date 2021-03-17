@@ -404,7 +404,6 @@ void plot_graph(
         uint32_t subgraph_radius) {
 
     path output_directory = paf_path.parent_path();
-    create_directories(output_directory);
 
     path svg_path = paf_path;
     svg_path.replace_extension("double_stranded.svg");
@@ -536,7 +535,7 @@ int main(int argc, char* argv[]){
             ("subgraph",
              value<string>(&subgraph_argument)
              ->default_value(""),
-             "File path of PAF file containing alignments to some reference")
+             "Subset the graph by radius r around a node n, using the format n:r")
             ;
 
 
