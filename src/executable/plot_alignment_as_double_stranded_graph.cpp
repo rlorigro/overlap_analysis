@@ -268,7 +268,8 @@ void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excl
     string line;
 
     while(getline(file,line)){
-        excluded_reads.emplace(line.substr(0,line.size()-1));
+        excluded_reads.emplace(line.substr(0,line.size()));
+        cerr << line.substr(0,line.size()) << '\n';
     }
 }
 
@@ -291,7 +292,16 @@ void exclude_reads_from_graph(
             }
 
             if (excluded_reads.count(result->second) > 0) {
-                graph.delNode(nodes[id]);
+                cout << "excluding: " << result->second << '\n';
+
+                // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
+                uint32_t forward_id = 2*id;
+                uint32_t reverse_id = 2*id + 1;
+
+                graph.delNode(nodes[forward_id]);
+                nodes[forward_id] = nullptr;
+                graph.delNode(nodes[reverse_id]);
+                nodes[reverse_id] = nullptr;
             }
         }
     }
@@ -418,6 +428,7 @@ void plot_graph(
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
     if (not excluded_reads_path.empty()){
+        cerr << "Excluding reads\n";
         exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name);
     }
 
