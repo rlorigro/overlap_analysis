@@ -23,23 +23,49 @@ using std::max;
 
 
 ChainElement::ChainElement(
-        string& paf_line,
         string& ref_name,
         uint32_t ref_start,
         uint32_t ref_stop,
         uint32_t query_start,
         uint32_t query_stop,
         uint32_t ref_length,
+        uint32_t query_length,
+        uint32_t residue_matches,
+        uint32_t alignment_length,
+        uint32_t mapping_quality,
         bool is_reverse):
-    paf_line(paf_line),
-    ref_name(ref_name),
-    ref_start(ref_start),
-    ref_stop(ref_stop),
-    query_start(query_start),
-    query_stop(query_stop),
-    ref_length(ref_length),
-    is_reverse(is_reverse)
+        ref_name(ref_name),
+        ref_start(ref_start),
+        ref_stop(ref_stop),
+        query_start(query_start),
+        query_stop(query_stop),
+        ref_length(ref_length),
+        query_length(query_length),
+        residue_matches(residue_matches),
+        alignment_length(alignment_length),
+        map_quality(mapping_quality),
+        is_reverse(is_reverse)
 {}
+
+
+uint32_t ChainElement::get_forward_start() const{
+    if (is_reverse){
+        return ref_stop;
+    }
+    else{
+        return ref_start;
+    }
+}
+
+
+uint32_t ChainElement::get_forward_stop() const{
+    if (is_reverse){
+        return ref_start;
+    }
+    else{
+        return ref_stop;
+    }
+}
 
 
 uint32_t ChainElement::distance_to_end_of_contig() const{
@@ -57,12 +83,12 @@ uint32_t ChainElement::distance_to_end_of_contig() const{
 
 
 ostream& operator<<(ostream& o, const ChainElement& e){
-    o << '(' << e.query_start << ',' << e.query_stop << ")" << (e.is_reverse ? "-":"+") << " " << e.ref_name << " " << e.ref_start << " " << e.ref_stop << " " << e.ref_length;
+    o << '(' << e.query_start << ',' << e.query_stop << ")" << (e.is_reverse ? "-":"+") << " " << e.ref_name << " "
+      << e.ref_start << " " << e.ref_stop << " " << e.ref_length;
     return o;
 }
 
 
-/// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md
 void AlignmentChains::load_from_paf(path paf_path){
     ifstream paf_file(paf_path);
 
@@ -99,17 +125,21 @@ bool parse_reversal_token(string& token){
     return is_reverse;
 }
 
-
+/// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md
 void AlignmentChains::add_alignment(string line){
     string token;
     string region_name;
     string query_name;
-    uint32_t ref_start;
-    uint32_t ref_stop;
-    uint32_t query_start;
-    uint32_t query_stop;
-    uint32_t ref_length;
-    bool is_reverse;
+    uint32_t ref_start = 0;
+    uint32_t ref_stop = 0;
+    uint32_t ref_length = 0;
+    uint32_t query_start = 0;
+    uint32_t query_stop = 0;
+    uint32_t query_length = 0;
+    uint32_t map_quality = 0;
+    uint32_t residue_matches = 0;
+    uint32_t alignment_length = 0;
+    bool is_reverse = false;
 
     uint64_t n_delimiters = 0;
 
@@ -117,6 +147,9 @@ void AlignmentChains::add_alignment(string line){
         if (c == '\t') {
             if (n_delimiters == 0) {
                 query_name = token;
+            }
+            else if (n_delimiters == 1) {
+                query_length = stoi(token);
             }
             else if (n_delimiters == 2) {
                 query_start = stoi(token);
@@ -138,20 +171,32 @@ void AlignmentChains::add_alignment(string line){
             }
             else if (n_delimiters == 8) {
                 ref_stop = stoi(token);
+            }
+            else if (n_delimiters == 9) {
+                residue_matches = stoi(token);
+            }
+            else if (n_delimiters == 10) {
+                alignment_length = stoi(token);
+            }
+            else if (n_delimiters == 11){
+                map_quality = stoi(token);
 
-                ChainElement e(
-                        line,
-                        region_name,
-                        ref_start,
-                        ref_stop,
-                        query_start,
-                        query_stop,
-                        ref_length,
-                        is_reverse);
+                if (map_quality > min_quality){
+                    ChainElement e(
+                            region_name,
+                            ref_start,
+                            ref_stop,
+                            query_start,
+                            query_stop,
+                            ref_length,
+                            query_length,
+                            residue_matches,
+                            alignment_length,
+                            map_quality,
+                            is_reverse);
 
-                chains[query_name].add(e);
-
-                cerr << query_name << " " << e << '\n';
+                    chains[query_name].add(e);
+                }
             }
 
             token.resize(0);
@@ -169,15 +214,19 @@ void AlignmentChains::add_alignment(string line){
             token += c;
         }
     }
-
 }
 
 
 bool compare_chain_elements(ChainElement& a, ChainElement& b){
-    auto midpoint_a = a.query_stop - a.query_start;
-    auto midpoint_b = b.query_stop - b.query_start;
+    auto midpoint_a = (double(a.query_stop) - double(a.query_start))/2;
+    auto midpoint_b = (double(b.query_stop) - double(b.query_start))/2;
 
     return midpoint_a < midpoint_b;
+}
+
+
+size_t AlignmentChain::size() const{
+    return chain.size();
 }
 
 
@@ -190,7 +239,8 @@ uint32_t AlignmentChain::compute_distance(ChainElement& a, ChainElement& b){
     uint32_t distance = 0;
     if (a.ref_name == b.ref_name){
         // Because minimap2/winnowmap allow supplementaries to overlap, there may be negative distances. Clip them at 0.
-        distance = max(0, int32_t(a.ref_stop) - int32_t(b.ref_start));
+        // Also must take into account direction when looking up ref start/stop.
+        distance = max(0, int32_t(a.get_forward_stop()) - int32_t(b.get_forward_start()));
     }
     else{
         // If 2 successive alignments are on different contigs, find the minimum possible distance (+gap penalty)

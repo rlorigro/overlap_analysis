@@ -23,27 +23,35 @@ using std::map;
 
 class ChainElement {
 public:
-    string paf_line;
     string ref_name;
     uint32_t ref_start;
     uint32_t ref_stop;
     uint32_t query_start;
     uint32_t query_stop;
     uint32_t ref_length;
+    uint32_t query_length;
+    uint32_t residue_matches;
+    uint32_t alignment_length;
+    uint32_t map_quality;
     bool is_reverse;
 
     /// Methods ///
     ChainElement(
-            string& paf_line,
-            string& ref_name,
-            uint32_t ref_start,
-            uint32_t ref_stop,
-            uint32_t query_start,
-            uint32_t query_stop,
-            uint32_t ref_length,
-            bool is_reverse);
+        string& ref_name,
+        uint32_t ref_start,
+        uint32_t ref_stop,
+        uint32_t query_start,
+        uint32_t query_stop,
+        uint32_t ref_length,
+        uint32_t query_length,
+        uint32_t residue_matches,
+        uint32_t alignment_length,
+        uint32_t mapping_quality,
+        bool is_reverse);
 
     uint32_t distance_to_end_of_contig() const;
+    uint32_t get_forward_start() const;
+    uint32_t get_forward_stop() const;
 
     ChainElement()=default;
 };
@@ -54,10 +62,13 @@ ostream& operator<<(ostream& o, const ChainElement& e);
 
 class AlignmentChain {
 public:
-    const string query_name;
     vector <ChainElement> chain;
-    const uint32_t max_gap = 50000;
-    const uint32_t gap_penalty = 10000;
+
+    // Break chains using this threshold
+    static const uint32_t max_gap = 50000;
+
+    // Add this penalty for each time a chain jumps between contigs
+    static const uint32_t gap_penalty = 5000;
 
     /// Methods ///
     AlignmentChain()=default;
@@ -65,12 +76,16 @@ public:
     void sort_chain();
     void split(set <pair <size_t, size_t> >& subchain_bounds, pair <size_t, size_t> bounds = {0,0});
     uint32_t compute_distance(ChainElement& a, ChainElement& b);
+    size_t size() const;
 };
 
 
 class AlignmentChains {
 public:
     map <string, AlignmentChain> chains;
+
+    // Ignore alignments with mapQ score less than this
+    static const uint32_t min_quality = 5;
 
     /// Methods ///
     AlignmentChains()=default;
