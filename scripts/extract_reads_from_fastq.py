@@ -41,7 +41,7 @@ def main(fastq_path, query_ids_path):
             if offset_index < len(index_elements):
                 index_element = index_elements[offset_index]
             else:
-                exit("ERROR: attempted to access fastq index element " + offset_index + " which is greater than the 
+                exit("ERROR: attempted to access fastq index element " + offset_index + " which is greater than the "
                      "size of the list of indexes")
 
 
