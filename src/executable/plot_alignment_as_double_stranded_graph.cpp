@@ -430,12 +430,10 @@ void write_all_read_alignments_as_paf(
         for (auto& c: line){
             // Parse the line up to the end of the first token in the PAF (TSV)
             if (c == '\t'){
-                cerr << read_name << '\n';
 
                 // If this read is contained in the graph or subgraph, then write the line to the output PAF
                 if (read_names.count(read_name) > 0){
                     output_file << line << '\n';
-                    cerr << "in subgraph" << '\n';
                 }
 
                 // Reset token

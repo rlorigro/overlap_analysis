@@ -128,7 +128,6 @@ void get_all_read_names(
             }
         }
 
-        cerr << "adding name to read names: " << label << '\n';
         read_names.emplace(label);
     }
 }
