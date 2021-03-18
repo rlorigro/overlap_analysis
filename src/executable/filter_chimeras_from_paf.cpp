@@ -2,6 +2,7 @@
 
 #include <experimental/filesystem>
 #include <iostream>
+#include <fstream>
 #include <utility>
 #include <string>
 #include <vector>
@@ -80,7 +81,6 @@ bool chain_is_palindromic(const AlignmentChain& chain, const pair <size_t, size_
             right_contigs.emplace(c.ref_name);
         }
 
-//        cerr << left_length << " " << right_length << '\n';
     }
 
     // A palindrome should have only 1 strand reversal and both strands should map to one contig
@@ -90,7 +90,7 @@ bool chain_is_palindromic(const AlignmentChain& chain, const pair <size_t, size_
         if (*left_contigs.begin() == *right_contigs.begin()){
             double length_ratio = double(left_length)/double(right_length);
 
-//            cerr << '\t' << "length ratio: " << length_ratio << '\n';
+            cerr << '\t' << "length ratio: " << length_ratio << '\n';
 
         }
     }
@@ -103,6 +103,12 @@ void filter_paf(path paf_path){
     AlignmentChains alignment_chains;
     alignment_chains.load_from_paf(paf_path);
 
+    path output_path = paf_path;
+    output_path.replace_extension("chimeric_reads.txt");
+    ofstream file(output_path);
+
+    cerr << "Writing chimeric reads to file: " << output_path << '\n';
+
     for (auto& [name, chain]: alignment_chains.chains) {
         // Sort by order of occurrence in query (read) sequence
         chain.sort_chain();
@@ -111,19 +117,19 @@ void filter_paf(path paf_path){
         set <pair <size_t, size_t> > subchain_bounds;
         chain.split(subchain_bounds);
 
-//        cerr << "Subchains created for read " << name << '\n';
+        cerr << "Subchains created for read " << name << '\n';
         for (auto& item: subchain_bounds){
             for (size_t i=item.first; i < item.second; i++) {
-//                cerr << '\t' << chain.chain[i] << '\n';
+                cerr << '\t' << chain.chain[i] << '\n';
             }
 
             chain_is_palindromic(chain, item);
 
-//            cerr << '\n' << '\n';
+            cerr << '\n' << '\n';
         }
 
         if (subchain_bounds.size() > 1){
-            cerr << name << '\n';
+            file << name << '\n';
         }
     }
 }

@@ -71,4 +71,12 @@ void assign_graph_node_labels(
 
 void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path output_path);
 
+void get_all_read_names(
+        Graph& graph,
+        vector<node>& nodes,
+        uint32_string_bimap& id_vs_name,
+        bool double_stranded,
+        bool strip_directional_tag,
+        set<string>& read_names);
+
 #endif //OVERLAP_ANALYSIS_GRAPH_UTILS_HPP

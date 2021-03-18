@@ -98,3 +98,37 @@ void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path ou
 
     ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
 }
+
+
+void get_all_read_names(
+        Graph& graph,
+        vector<node>& nodes,
+        uint32_string_bimap& id_vs_name,
+        bool double_stranded,
+        bool strip_directional_tag,
+        set<string>& read_names){
+
+    for (size_t id=0; id<nodes.size(); id++){
+        auto single_stranded_id = id;
+
+        // If specified, undo the even/odd encoding scheme to reduce multiple node ids to a single mapping id->name
+        if (double_stranded){
+            single_stranded_id = (id - (id % 2)) / 2;
+        }
+
+        if (nodes[id] == nullptr){
+            continue;
+        }
+
+        auto label = id_vs_name.left.at(single_stranded_id);
+
+        if (strip_directional_tag){
+            if (label.back() == '+' or label.back() == '-'){
+                label = label.substr(0,label.size()-1);
+            }
+        }
+
+        cerr << "adding name to read names: " << label << '\n';
+        read_names.emplace(label);
+    }
+}

@@ -33,6 +33,7 @@ using ogdf::Shape;
 #include <queue>
 
 using std::experimental::filesystem::create_directories;
+using std::experimental::filesystem::absolute;
 using std::experimental::filesystem::path;
 using std::runtime_error;
 using std::unordered_map;
@@ -269,7 +270,6 @@ void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excl
 
     while(getline(file,line)){
         excluded_reads.emplace(line.substr(0,line.size()));
-        cerr << line.substr(0,line.size()) << '\n';
     }
 }
 
@@ -292,8 +292,6 @@ void exclude_reads_from_graph(
             }
 
             if (excluded_reads.count(result->second) > 0) {
-                cout << "excluding: " << result->second << '\n';
-
                 // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
                 uint32_t forward_id = 2*id;
                 uint32_t reverse_id = 2*id + 1;
@@ -405,18 +403,96 @@ void create_subgraph(
 }
 
 
+
+/// This method is useful for extracting subgraphs from a PAF, is implemented in a slow manner, though because
+/// it re-iterates the PAF
+/// \param graph
+/// \param nodes
+/// \param id_vs_name
+/// \param double_stranded
+/// \param paf_path
+void write_all_read_alignments_as_paf(
+        Graph& graph,
+        vector<node>& nodes,
+        uint32_string_bimap& id_vs_name,
+        bool double_stranded,
+        path input_paf_path,
+        path output_paf_path){
+
+    set<string> read_names;
+    get_all_read_names(graph, nodes, id_vs_name, double_stranded, true, read_names);
+
+    string line;
+    string read_name;
+    ifstream paf_file(input_paf_path);
+    ofstream output_file(output_paf_path);
+    while (getline(paf_file, line)){
+        for (auto& c: line){
+            // Parse the line up to the end of the first token in the PAF (TSV)
+            if (c == '\t'){
+                cerr << read_name << '\n';
+
+                // If this read is contained in the graph or subgraph, then write the line to the output PAF
+                if (read_names.count(read_name) > 0){
+                    output_file << line << '\n';
+                    cerr << "in subgraph" << '\n';
+                }
+
+                // Reset token
+                read_name.resize(0);
+
+                // Stop parsing line
+                break;
+            }
+            read_name += c;
+        }
+    }
+}
+
+
+void write_arguments(
+        path file_path,
+        path paf_path,
+        uint32_t min_quality,
+        path excluded_reads_path,
+        uint16_t label_type,
+        string subgraph_node_name,
+        uint32_t subgraph_radius){
+
+    ofstream file(file_path);
+
+    file << "paf_path," << paf_path << '\n';
+    file << "min_quality," << min_quality << '\n';
+    file << "excluded_reads_path," << excluded_reads_path << '\n';
+    file << "label_type," << label_type << '\n';
+    file << "subgraph_node_name," << subgraph_node_name << '\n';
+    file << "subgraph_radius," << subgraph_radius << '\n';
+}
+
+
 void plot_graph(
         path paf_path,
+        path output_directory,
         uint32_t min_quality,
         path excluded_reads_path,
         uint16_t label_type,
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
-    path output_directory = paf_path.parent_path();
+    create_directories(output_directory);
 
-    path svg_path = paf_path;
-    svg_path.replace_extension("double_stranded.svg");
+    path args_path = output_directory / "args.csv";
+
+    write_arguments(
+            absolute(args_path),
+            absolute(paf_path),
+            min_quality,
+            absolute(excluded_reads_path),
+            label_type,
+            subgraph_node_name,
+            subgraph_radius);
+
+    path svg_path = output_directory / "double_stranded_overlap_graph.svg";
 
     bool double_stranded_labeling = true;
     uint32_string_bimap id_vs_name;
@@ -427,43 +503,59 @@ void plot_graph(
 
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
+    // Delete any nodes from the graph if a list of reads to be excluded is provided
     if (not excluded_reads_path.empty()){
-        cerr << "Excluding reads\n";
+        cerr << "Excluding reads...\n";
         exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name);
     }
 
     // Do subgraph extraction if a node was provided as a start point for BFS
     if (not subgraph_node_name.empty()){
+        path subgraph_paf_path = output_directory / "subgraph.paf";
+
         Graph subgraph;
         uint32_string_bimap subgraph_id_vs_name;
         vector<node> subgraph_nodes;
 
         create_subgraph(
-            overlap_graph,
-            subgraph,
-            id_vs_name,
-            subgraph_id_vs_name,
-            nodes,
-            subgraph_nodes,
-            subgraph_node_name,
-            subgraph_radius);
+                overlap_graph,
+                subgraph,
+                id_vs_name,
+                subgraph_id_vs_name,
+                nodes,
+                subgraph_nodes,
+                subgraph_node_name,
+                subgraph_radius);
 
         overlap_graph = subgraph;
         nodes = subgraph_nodes;
         id_vs_name = subgraph_id_vs_name;
 
         double_stranded_labeling = false;
+
+        // If the user specified a subgraph then it may be useful to write out the subgraph PAF as well
+        write_all_read_alignments_as_paf(
+                overlap_graph,
+                nodes,
+                id_vs_name,
+                double_stranded_labeling,
+                paf_path,
+                subgraph_paf_path);
+
+        // TODO FIX PAF EXRACTION FOR THIS CASE ^^^
+
     }
 
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
 
     if (label_type == 1) {
+        // Type 1 is to directly print the labels in the SVG
         assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
     }
     else{
-        path label_csv_path = paf_path;
-        label_csv_path.replace_extension("node_names.csv");
+        // Type 2 prints only integer IDs and then creates a lookup table CSV separately for ID:name
+        path label_csv_path = output_directory / "node_names.csv";
         assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling, label_csv_path);
     }
 
@@ -509,6 +601,7 @@ pair<string, uint32_t> parse_subgraph_argument(string subgraph_argument){
 
 int main(int argc, char* argv[]){
     path paf_path;
+    path output_directory;
     path excluded_reads_path;
     uint32_t min_quality;
     uint16_t label_type;
@@ -523,6 +616,11 @@ int main(int argc, char* argv[]){
              value<path>(&paf_path)
              ->required(),
              "File path of PAF file containing alignments to some reference")
+
+            ("output_dir",
+             value<path>(&output_directory)
+             ->required(),
+             "Where to dump output SVG, CSV, PAF, etc")
 
             ("mapq",
             value<uint32_t>(&min_quality)
@@ -568,7 +666,7 @@ int main(int argc, char* argv[]){
         subgraph_radius = 0;
     }
 
-    plot_graph(paf_path, min_quality, excluded_reads_path, label_type, subgraph_node_name, subgraph_radius);
+    plot_graph(paf_path, output_directory, min_quality, excluded_reads_path, label_type, subgraph_node_name, subgraph_radius);
 
     return 0;
 }
