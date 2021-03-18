@@ -278,8 +278,11 @@ void exclude_reads_from_graph(
         Graph& graph,
         vector<node>& nodes,
         path excluded_reads_path,
-        uint32_string_bimap id_vs_name
+        const uint32_string_bimap& id_vs_name,
+        path output_path
 ){
+    ofstream file(output_path);
+
     set<string> excluded_reads;
     load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
 
@@ -300,6 +303,8 @@ void exclude_reads_from_graph(
                 nodes[forward_id] = nullptr;
                 graph.delNode(nodes[reverse_id]);
                 nodes[reverse_id] = nullptr;
+
+                file << result->second << '\n';
             }
         }
     }
@@ -503,8 +508,9 @@ void plot_graph(
 
     // Delete any nodes from the graph if a list of reads to be excluded is provided
     if (not excluded_reads_path.empty()){
+        path reads_excluded_log_path = output_directory / "reads_excluded.txt";
         cerr << "Excluding reads...\n";
-        exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name);
+        exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name, reads_excluded_log_path);
     }
 
     // Do subgraph extraction if a node was provided as a start point for BFS
