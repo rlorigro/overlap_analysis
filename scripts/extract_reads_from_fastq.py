@@ -12,6 +12,9 @@ def load_query_ids(query_ids_path):
     ids = list()
     with open(query_ids_path, 'r') as file:
         for line in file:
+            if line == '\n':
+                continue
+
             ids.append(line.strip())
 
     return ids
