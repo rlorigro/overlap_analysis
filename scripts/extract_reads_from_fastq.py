@@ -31,9 +31,19 @@ def main(fastq_path, query_ids_path):
         mm = mmap.mmap(input_file.fileno(), 0, prot=mmap.PROT_READ)
 
         for name in queries:
-            offset_index = name_to_offset[name]
-            index_element = index_elements[offset_index]
-            print(name, index_element)
+            print("fetching %s" % name)
+
+            if name in name_to_offset:
+                offset_index = name_to_offset[name]
+            else:
+                exit("ERROR: read name not found in fastq index")
+
+            if offset_index < len(index_elements):
+                index_element = index_elements[offset_index]
+            else:
+                exit("ERROR: attempted to access fastq index element " + offset_index + " which is greater than the 
+                     "size of the list of indexes")
+
 
             s = extract_bytes_from_file(mmap_file_object=mm,
                                         offset=index_element.sequence_offset,
