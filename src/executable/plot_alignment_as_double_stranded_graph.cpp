@@ -286,27 +286,31 @@ void exclude_reads_from_graph(
     set<string> excluded_reads;
     load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
 
-    for (size_t id=0; id<nodes.size(); id++){
-        if (nodes[id] != nullptr){
-            auto result = id_vs_name.left.find(id);
+    for (auto& name: excluded_reads){
+        size_t id;
+        auto result = id_vs_name.right.find(name);
 
-            if (result == id_vs_name.left.end()){
-                continue;
-            }
-
-            if (excluded_reads.count(result->second) > 0) {
-                // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
-                uint32_t forward_id = 2*id;
-                uint32_t reverse_id = 2*id + 1;
-
-                graph.delNode(nodes[forward_id]);
-                nodes[forward_id] = nullptr;
-                graph.delNode(nodes[reverse_id]);
-                nodes[reverse_id] = nullptr;
-
-                file << result->second << '\n';
-            }
+        if (result == id_vs_name.right.end()){
+            continue;
         }
+        else{
+            id = result->second;
+        }
+
+        // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
+        uint32_t forward_id = 2*id;
+        uint32_t reverse_id = 2*id + 1;
+
+        if (nodes[forward_id] != nullptr) {
+            graph.delNode(nodes[forward_id]);
+            nodes[forward_id] = nullptr;
+        }
+        if (nodes[reverse_id] != nullptr) {
+            graph.delNode(nodes[reverse_id]);
+            nodes[reverse_id] = nullptr;
+        }
+
+        file << result->second << '\n';
     }
 }
 
@@ -545,9 +549,6 @@ void plot_graph(
                 double_stranded_labeling,
                 paf_path,
                 subgraph_paf_path);
-
-        // TODO FIX PAF EXRACTION FOR THIS CASE ^^^
-
     }
 
     GraphAttributes graph_attributes;
