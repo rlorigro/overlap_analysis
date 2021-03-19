@@ -117,16 +117,16 @@ void filter_paf(path paf_path){
         set <pair <size_t, size_t> > subchain_bounds;
         chain.split(subchain_bounds);
 
-        cerr << "Subchains created for read " << name << '\n';
-        for (auto& item: subchain_bounds){
-            for (size_t i=item.first; i < item.second; i++) {
-                cerr << '\t' << chain.chain[i] << '\n';
-            }
-
-            chain_is_palindromic(chain, item);
-
-            cerr << '\n' << '\n';
-        }
+//        cerr << "Subchains created for read " << name << '\n';
+//        for (auto& item: subchain_bounds){
+//            for (size_t i=item.first; i < item.second; i++) {
+//                cerr << '\t' << chain.chain[i] << '\n';
+//            }
+//
+//            chain_is_palindromic(chain, item);
+//
+//            cerr << '\n' << '\n';
+//        }
 
         if (subchain_bounds.size() > 1){
             file << name << '\n';

@@ -238,9 +238,18 @@ void AlignmentChain::sort_chain() {
 uint32_t AlignmentChain::compute_distance(ChainElement& a, ChainElement& b){
     uint32_t distance = 0;
     if (a.ref_name == b.ref_name){
-        // Because minimap2/winnowmap allow supplementaries to overlap, there may be negative distances. Clip them at 0.
-        // Also must take into account direction when looking up ref start/stop.
-        distance = max(0, int32_t(a.get_forward_stop()) - int32_t(b.get_forward_start()));
+        auto a_start = a.get_forward_start();
+        auto b_start = b.get_forward_start();
+        auto a_stop = a.get_forward_stop();
+        auto b_stop = b.get_forward_stop();
+
+        // If there is any overlap, set distance to 0
+        if ((a_stop > b_start and a_start < b_stop) or (b_stop > a_start and b_start < a_stop)){
+            distance = 0;
+        }
+        else {
+            distance = abs(int32_t(a_stop) - int32_t(b_start));
+        }
     }
     else{
         // If 2 successive alignments are on different contigs, find the minimum possible distance (+gap penalty)
