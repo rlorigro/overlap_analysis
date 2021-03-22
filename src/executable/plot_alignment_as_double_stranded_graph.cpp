@@ -34,6 +34,7 @@ using ogdf::Shape;
 
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::absolute;
+using std::experimental::filesystem::exists;
 using std::experimental::filesystem::path;
 using std::runtime_error;
 using std::unordered_map;
@@ -266,6 +267,10 @@ void load_paf_as_graph(
 
 void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads){
     ifstream file(excluded_reads_path);
+    if (not file.good()){
+        throw runtime_error("ERROR: excluded reads file could not be read: " + excluded_reads_path.string());
+    }
+
     string line;
 
     while(getline(file,line)){
@@ -282,6 +287,9 @@ void exclude_reads_from_graph(
         path output_path
 ){
     ofstream file(output_path);
+    if (not file.good()){
+        throw runtime_error("ERROR: could not write to output: " + output_path.string());
+    }
 
     set<string> excluded_reads;
     load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
@@ -486,7 +494,18 @@ void plot_graph(
         string subgraph_node_name,
         uint32_t subgraph_radius) {
 
-    create_directories(output_directory);
+    if (not exists(paf_path)){
+        throw runtime_error("ERROR: input PAF does not exist: " + paf_path.string());
+    }
+    if (not exists(excluded_reads_path)){
+        throw runtime_error("ERROR: input excluded reads file does not exist: " + excluded_reads_path.string());
+    }
+    if (exists(output_directory)){
+        throw runtime_error("ERROR: output directory already exists");
+    }
+    else{
+        create_directories(output_directory);
+    }
 
     path args_path = output_directory / "args.csv";
 
