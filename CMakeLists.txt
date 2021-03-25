@@ -121,58 +121,6 @@ include_directories(external/ogdf/include/)
 
 message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
 
-
-
-##############################################
-# ------------------------------------------ #
-# -------- LINKING EXTERNAL LIBRARY -------- #
-# --------------- networkit ---------------- #
-# ------------------------------------------ #
-##############################################
-#
-## Download or update library as an external project
-#ExternalProject_Add(project_networkit
-#        GIT_REPOSITORY https://github.com/networkit/networkit.git
-#        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/
-#        DOWNLOAD_COMMAND ""
-#        UPDATE_COMMAND ""
-#        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/external/networkit/ -DCMAKE_INSTALL_LIBDIR=${CMAKE_SOURCE_DIR}/external/networkit/lib
-#        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/networkit/stamp/
-##        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/networkit/src/
-#        BINARY_DIR ${CMAKE_SOURCE_DIR}/external/networkit/build/
-#        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/networkit/
-#        INSTALL_COMMAND make install
-#        )
-#
-## Define INSTALL_DIR as the install directory for external library
-#ExternalProject_Get_Property(project_networkit INSTALL_DIR)
-#
-## Create new library for external project (so it can be linked with main library)
-#add_library(networkit SHARED IMPORTED)
-#set_property(TARGET networkit
-#        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libnetworkit.so)
-#
-#add_library(tlx STATIC IMPORTED)
-#set_property(TARGET tlx
-#        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libtlx.a)
-#
-## Define main library as dependent on the downloaded project (transitively)
-#add_dependencies(networkit
-#        project_networkit
-#        tlx)
-#
-#add_dependencies(overlap_analysis networkit)
-#
-## Ensure that main library has access to primary dependencies' and secondary dependencies' headers
-#include_directories(external/networkit/include/)
-#
-## Add runtime path for main library so it can access external library
-##set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/networkit")
-#
-#message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
-#
-#
-
 ############################################
 # ---------------------------------------- #
 # -------- Generating executables -------- #
@@ -186,6 +134,7 @@ find_package(Threads REQUIRED)
 # stupid "experimental" filesystem library for gcc <8.0
 link_libraries(stdc++fs)
 
+#set(Boost_DEBUG 1)
 find_package( Boost 1.60 COMPONENTS program_options REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
