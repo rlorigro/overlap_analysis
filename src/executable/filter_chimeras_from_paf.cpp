@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <cmath>
 
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::path;
@@ -20,6 +21,7 @@ using std::queue;
 using std::pair;
 using std::cerr;
 using std::cout;
+using std::abs;
 
 
 #include "boost/program_options.hpp"
@@ -99,6 +101,26 @@ bool chain_is_palindromic(const AlignmentChain& chain, const pair <size_t, size_
 }
 
 
+void print_subchains(AlignmentChain& chain, string& read_name){
+    // Do recursive splitting to find the bounds of sub-chains
+    set <pair <size_t, size_t> > subchain_bounds;
+    chain.split(subchain_bounds);
+
+    cerr << "Subchains created for read " << read_name << '\n';
+
+    for (auto& item: subchain_bounds){
+        for (size_t i=item.first; i < item.second; i++) {
+                cerr << '\t' << chain.chain[i] << '\n';
+        }
+
+        chain_is_palindromic(chain, item);
+
+        cerr << '\n' << '\n';
+    }
+
+}
+
+
 void filter_paf(path paf_path){
     AlignmentChains alignment_chains;
     alignment_chains.load_from_paf(paf_path);
@@ -109,27 +131,60 @@ void filter_paf(path paf_path){
 
     cerr << "Writing chimeric reads to file: " << output_path << '\n';
 
+    vector<size_t> non_chimer_lengths;
+    vector<size_t> chimer_lengths;
+
+    path non_chimer_lengths_path = paf_path;
+    path chimer_lengths_path = paf_path;
+
+    non_chimer_lengths_path.replace_extension("non_chimer_lengths.txt");
+    chimer_lengths_path.replace_extension("chimer_lengths.txt");
+
+    ofstream non_chimer_lengths_file(non_chimer_lengths_path);
+    ofstream chimer_lengths_file(chimer_lengths_path);
+
+    path chimer_secondary_lengths_path = paf_path;
+    chimer_secondary_lengths_path.replace_extension("chimer_secondary_lengths.txt");
+    ofstream chimer_secondary_lengths_file(chimer_secondary_lengths_path);
+
     for (auto& [name, chain]: alignment_chains.chains) {
         // Sort by order of occurrence in query (read) sequence
         chain.sort_chain();
 
-        // Do recursive splitting to find the bounds of sub-chains
+        // Do recursive splitting to find the index bounds of sub-chains
         set <pair <size_t, size_t> > subchain_bounds;
         chain.split(subchain_bounds);
 
-//        cerr << "Subchains created for read " << name << '\n';
-//        for (auto& item: subchain_bounds){
-//            for (size_t i=item.first; i < item.second; i++) {
-//                cerr << '\t' << chain.chain[i] << '\n';
-//            }
-//
-//            chain_is_palindromic(chain, item);
-//
-//            cerr << '\n' << '\n';
-//        }
+        if (subchain_bounds.size() > 1) {
+            vector<uint32_t> chain_lengths;
+            chain_lengths.resize(subchain_bounds.size());
+            uint32_t max_length = 0;
 
-        if (subchain_bounds.size() > 1){
+            for (auto &item: subchain_bounds) {
+                auto chain_length = 0;
+                for (uint32_t i = item.first; i < item.second; i++) {
+                    uint32_t length = abs(int32_t(chain.chain[i].query_stop) - int32_t(chain.chain[i].query_start));
+                    chain_length += length;
+
+                    // TODO: debug to find out why this is always 0
+                    chimer_lengths_file << length << '\n';
+                }
+
+                if (max_length < chain_length){
+                    max_length = chain_length;
+                }
+            }
+
+            for (auto l: chain_lengths){
+                if (l < max_length){
+                    chimer_secondary_lengths_file << l << '\n';
+                }
+            }
+
             file << name << '\n';
+        }
+        else{
+            non_chimer_lengths_file << chain.chain[0].query_length << '\n';
         }
     }
 }
