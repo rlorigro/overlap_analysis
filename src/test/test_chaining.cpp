@@ -9,7 +9,7 @@ using std::experimental::filesystem::path;
 int main(){
     path current_path = __FILE__;
     path project_directory = current_path.parent_path().parent_path().parent_path();
-    path test_path = project_directory / "data" / "test_chains.paf";
+    path test_path = project_directory / "data" / "test_chain_long.paf";
 
     AlignmentChains a;
     a.load_from_paf(test_path);
