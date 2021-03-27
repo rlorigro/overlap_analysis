@@ -177,6 +177,7 @@ void load_paf_as_graph(
     uint32_t start = 0;
     uint32_t stop = 0;
     uint32_t quality = 0;
+    uint32_t chain_score = 0;
     bool is_reverse = false;
 
     uint64_t n_delimiters = 0;
@@ -202,8 +203,11 @@ void load_paf_as_graph(
             }
             else if (n_delimiters == 11) {
                 quality = stoi(token);
+            }
+            else if (n_delimiters == 13) {
+                chain_score = stoi(token.substr(5,token.size()-5));
 
-//                cerr << region_name << " " << start << " " << stop << '\n';
+                //                cerr << region_name << " " << start << " " << stop << '\n';
 
                 if (quality >= min_quality) {
                     auto result = id_vs_name.right.find(read_name);
@@ -216,7 +220,7 @@ void load_paf_as_graph(
                     if (result != id_vs_name.right.end()) {
                         id = result->second;
                     }
-                    // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
+                        // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
                     else{
                         id = id_vs_name.size();
                         id_vs_name.insert(bimap_pair(id, read_name));
@@ -248,8 +252,8 @@ void load_paf_as_graph(
             n_delimiters++;
         }
         else if (c == '\n'){
-            if (n_delimiters < 11){
-                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF");
+            if (n_delimiters < 13){
+                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " + to_string(n_lines));
             }
 
             token.resize(0);
@@ -332,8 +336,6 @@ void create_subgraph(
         vector<node>& subgraph_nodes,
         string start_name,
         uint32_t radius){
-
-    cerr << "Extracting subgraph of radius " << radius << " around node " << start_name << '\n';
 
     uint32_t start_id;
     auto result = id_vs_name.right.find(start_name);
@@ -497,7 +499,7 @@ void plot_graph(
     if (not exists(paf_path)){
         throw runtime_error("ERROR: input PAF does not exist: " + paf_path.string());
     }
-    if (not exists(excluded_reads_path)){
+    if (not exists(excluded_reads_path) and not excluded_reads_path.empty()){
         throw runtime_error("ERROR: input excluded reads file does not exist: " + excluded_reads_path.string());
     }
     if (exists(output_directory)){
@@ -527,17 +529,20 @@ void plot_graph(
     Graph overlap_graph;
     vector<node> nodes;
 
+    cerr << "Loading PAF as graph...\n";
     load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
 
     // Delete any nodes from the graph if a list of reads to be excluded is provided
     if (not excluded_reads_path.empty()){
-        path reads_excluded_log_path = output_directory / "reads_excluded.txt";
         cerr << "Excluding reads...\n";
+        path reads_excluded_log_path = output_directory / "reads_excluded.txt";
         exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name, reads_excluded_log_path);
     }
 
     // Do subgraph extraction if a node was provided as a start point for BFS
     if (not subgraph_node_name.empty()){
+        cerr << "Extracting subgraph of radius " << subgraph_radius << " around node " << subgraph_node_name << '\n';
+
         path subgraph_paf_path = output_directory / "subgraph.paf";
 
         Graph subgraph;
@@ -570,6 +575,7 @@ void plot_graph(
                 subgraph_paf_path);
     }
 
+    cerr << "Assigning graph visual attributes...\n";
     GraphAttributes graph_attributes;
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
 
@@ -583,6 +589,7 @@ void plot_graph(
         assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling, label_csv_path);
     }
 
+    cerr << "Computing graph layout and saving SVG\n";
     write_graph_to_svg(overlap_graph, graph_attributes, svg_path);
 }
 
