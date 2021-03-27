@@ -21,8 +21,8 @@ set(CMAKE_CXX_FLAGS )
 
 set(CMAKE_CXX_FLAGS "-fno-new-ttp-matching -fsanitize=address -fexceptions")
 
-#add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
-add_definitions(-O3 -Wall)              # Much optimization
+add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
+#add_definitions(-O3 -Wall)              # Much optimization
 
 # Definitions needed to eliminate runtime dependency
 # on the boost system library.
@@ -170,6 +170,7 @@ set(EXECUTABLES
         fasta_to_RLE_fasta
         filter_chimeras_from_paf
         filter_palindromes_by_quality
+        find_overlapping_alignments
         label_alignment_info
         plot_alignment_as_graph
         plot_alignment_as_double_stranded_graph

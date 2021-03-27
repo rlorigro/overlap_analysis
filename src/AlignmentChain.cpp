@@ -103,6 +103,22 @@ void AlignmentChains::load_from_paf(path paf_path){
     }
 }
 
+void print_subchains(
+        const AlignmentChain& chain,
+        const set <pair <size_t, size_t> >& subchain_bounds,
+        const string& read_name){
+
+    cerr << "Subchains created for read " << read_name << '\n';
+
+    for (auto& item: subchain_bounds){
+        for (size_t i=item.first; i < item.second; i++) {
+            cerr << '\t' << chain.chain[i] << '\n';
+        }
+
+        cerr << '\n' << '\n';
+    }
+}
+
 
 void AlignmentChain::add(ChainElement& e){
     chain.emplace_back(e);
@@ -139,6 +155,7 @@ void AlignmentChains::add_alignment(string line){
     uint32_t map_quality = 0;
     uint32_t residue_matches = 0;
     uint32_t alignment_length = 0;
+    uint32_t chain_score = 0;
     bool is_reverse = false;
 
     uint64_t n_delimiters = 0;
@@ -180,8 +197,11 @@ void AlignmentChains::add_alignment(string line){
             }
             else if (n_delimiters == 11){
                 map_quality = stoi(token);
+            }
+            else if (n_delimiters == 13){
+                chain_score = stoi(token.substr(5,token.size()-5));
 
-                if (map_quality > min_quality){
+                if (map_quality > min_quality and chain_score > min_chain_score){
                     ChainElement e(
                             region_name,
                             ref_start,
@@ -203,7 +223,7 @@ void AlignmentChains::add_alignment(string line){
             n_delimiters++;
         }
         else if (c == '\n'){
-            if (n_delimiters < 11){
+            if (n_delimiters < 13){
                 throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF");
             }
 
@@ -218,8 +238,8 @@ void AlignmentChains::add_alignment(string line){
 
 
 bool compare_chain_elements(ChainElement& a, ChainElement& b){
-    auto midpoint_a = (double(a.query_stop) - double(a.query_start))/2;
-    auto midpoint_b = (double(b.query_stop) - double(b.query_start))/2;
+    auto midpoint_a = (double(a.query_stop) + double(a.query_start))/2;
+    auto midpoint_b = (double(b.query_stop) + double(b.query_start))/2;
 
     return midpoint_a < midpoint_b;
 }
@@ -305,19 +325,26 @@ void AlignmentChain::split(set <pair <size_t, size_t> >& subchain_bounds, pair <
 
 void AlignmentChains::split_all_chains(){
     for (auto& [name, chain]: chains) {
+
+        cerr << "before sorting:" << '\n';
+        for (auto& item: chain.chain){
+            cerr << item << '\n';
+        }
+        cerr << '\n';
+
         // Sort by order of occurrence in query (read) sequence
         chain.sort_chain();
+
+        cerr << "after sorting:" << '\n';
+        for (auto& item: chain.chain){
+            cerr << item << '\n';
+        }
+        cerr << '\n';
 
         // Do recursive splitting
         set <pair <size_t, size_t> > subchain_bounds;
         chain.split(subchain_bounds);
 
-        cerr << "Subchains created for read " << name << '\n';
-        for (auto& item: subchain_bounds){
-            for (size_t i=item.first; i < item.second; i++) {
-                cerr << '\t' << chain.chain[i] << '\n';
-            }
-            cerr << '\n' << '\n';
-        }
+        print_subchains(chain, subchain_bounds, name);
     }
 }

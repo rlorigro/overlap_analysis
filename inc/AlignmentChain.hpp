@@ -64,7 +64,7 @@ class AlignmentChain {
 public:
     vector <ChainElement> chain;
 
-    // Break chains using this threshold
+    // Break chains using this threshold for the largest gep between alignments
     static const uint32_t max_gap = 50000;
 
     // Add this penalty for each time a chain jumps between contigs
@@ -80,12 +80,21 @@ public:
 };
 
 
+void print_subchains(
+        const AlignmentChain& chain,
+        const set <pair <size_t, size_t> >& subchain_bounds,
+        const string& read_name);
+
+
 class AlignmentChains {
 public:
     map <string, AlignmentChain> chains;
 
     // Ignore alignments with mapQ score less than this
     static const uint32_t min_quality = 5;
+
+    // Ignore alignments with a chain score less than this (using the cm:i:_ tag)
+    static const uint32_t min_chain_score = 10;
 
     /// Methods ///
     AlignmentChains()=default;
