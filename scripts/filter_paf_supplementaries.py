@@ -4,7 +4,7 @@ import sys
 def filter_by_matches(paf_path):
     """
     PAF has columns (0-based):
-        1 = read_name
+        0 = read_name
         9 = n_matches
     """
 
@@ -14,7 +14,7 @@ def filter_by_matches(paf_path):
         for l,line in enumerate(file):
             tokens = line.strip().split()
 
-            read_name = tokens[1]
+            read_name = tokens[0]
 
             if read_name in alignments_per_read:
                 prev_tokens = alignments_per_read[read_name].strip().split()
@@ -44,6 +44,6 @@ def main(paf_path):
 if __name__ == "__main__":
 
     if len(sys.argv) != 2:
-        exit("ERROR: need to provide 1 argument: path of input GFA")
+        exit("ERROR: need to provide 1 argument: path of input PAF")
 
     main(sys.argv[1])
