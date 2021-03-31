@@ -23,10 +23,11 @@ using std::ostream;
 using std::string;
 using std::set;
 
+namespace overlap_analysis {
 
 class RegionalOverlapMap {
 public:
-    unordered_map <string, interval_map <uint32_t, set<uint32_t>, total_enricher> > intervals;
+    unordered_map<string, interval_map<uint32_t, set<uint32_t>, total_enricher> > intervals;
     size_t size;
 
     void insert(string& region_name, uint32_t start, uint32_t stop, uint32_t id);
@@ -36,5 +37,6 @@ public:
     void print(ostream& out);
 };
 
+}
 
 #endif //OVERLAP_ANALYSIS_OVERLAPMAP_HPP

@@ -46,37 +46,28 @@ using std::cout;
 typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
 
+namespace overlap_analysis {
 
-class BfsQueueElement{
-public:
-    node original_node;
-    node subgraph_node;
+template<class T> void render_graph(T& graph, uint16_t label_type, path output_directory) {
+    path svg_path = output_directory / "double_stranded_overlap_graph.svg";
 
-    BfsQueueElement()=default;
-    BfsQueueElement(node original_node, node subgraph_node);
-};
+    cerr << "Assigning graph visual attributes...\n";
+    graph.assign_default_graph_rendering_attributes();
 
+    if (label_type == 1) {
+        // Type 1 is to directly print the labels in the SVG
+        graph.assign_graph_node_labels();
+    } else if (label_type == 2) {
+        // Type 2 prints only integer IDs and then creates a lookup table CSV separately for ID:name
+        path label_csv_path = output_directory / "node_names.csv";
+        graph.assign_graph_node_labels(label_csv_path);
+    }
 
-void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes);
+    cerr << "Computing graph layout and saving SVG\n";
+    graph.write_graph_to_svg(svg_path);
 
+}
 
-void assign_graph_node_labels(
-        Graph& graph,
-        GraphAttributes& graph_attributes,
-        vector<node>& nodes,
-        uint32_string_bimap& id_vs_name,
-        bool double_stranded=false,
-        path output_path={}
-);
-
-void write_graph_to_svg(Graph& graph, GraphAttributes& graph_attributes, path output_path);
-
-void get_all_read_names(
-        Graph& graph,
-        vector<node>& nodes,
-        uint32_string_bimap& id_vs_name,
-        bool double_stranded,
-        bool strip_directional_tag,
-        set<string>& read_names);
+}
 
 #endif //OVERLAP_ANALYSIS_GRAPH_UTILS_HPP

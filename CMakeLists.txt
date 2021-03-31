@@ -54,10 +54,10 @@ set(SOURCES
         src/FastaReader.cpp
         src/FastaWriter.cpp
         src/FastqIterator.cpp
+        src/Graph.cpp
         src/graph_utils.cpp
         src/PafElement.cpp
         src/SequenceElement.cpp
-        src/RunlengthSequenceElement.cpp
         )
 
 project(overlap_analysis)
@@ -145,7 +145,6 @@ set(TESTS
         test_boost_interval_map
         test_chaining
         test_ogdf
-#        test_networkit
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
@@ -157,8 +156,6 @@ foreach(FILENAME_PREFIX ${TESTS})
             stdc++fs
             ogdf
             coin
-#            networkit
-#            tlx
             )
 
 endforeach()
@@ -167,12 +164,10 @@ endforeach()
 # -------- EXECUTABLES --------
 
 set(EXECUTABLES
-        fasta_to_RLE_fasta
         filter_chimeras_from_paf
         filter_palindromes_by_quality
         find_overlapping_alignments
         label_alignment_info
-        plot_alignment_as_graph
         plot_alignment_as_double_stranded_graph
         )
 
@@ -185,8 +180,6 @@ foreach(FILENAME_PREFIX ${EXECUTABLES})
             stdc++fs
             ogdf
             coin
-#            networkit
-#            tlx
             )
 endforeach()
 

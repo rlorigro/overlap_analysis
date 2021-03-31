@@ -20,6 +20,7 @@ using std::set;
 using std::list;
 using std::map;
 
+namespace overlap_analysis{
 
 class ChainElement {
 public:
@@ -93,8 +94,8 @@ public:
     // Ignore alignments with mapQ score less than this
     static const uint32_t min_quality = 5;
 
-    // Ignore alignments with a chain score less than this (using the cm:i:_ tag)
-    static const uint32_t min_chain_score = 10;
+    // Ignore alignments with a fewer than n minimizers in the chain (using the cm:i:_ tag)
+    static const uint32_t min_chain_minimizers = 0;
 
     /// Methods ///
     AlignmentChains()=default;
@@ -103,5 +104,6 @@ public:
     void split_all_chains();
 };
 
+}
 
 #endif //OVERLAP_ANALYSIS_ALIGNMENTCHAIN_HPP

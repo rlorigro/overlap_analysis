@@ -4,6 +4,7 @@
 using std::runtime_error;
 using std::pow;
 
+namespace overlap_analysis {
 
 double quality_char_to_error_probability(char q){
     return pow(10,double(q - 33) / -10.0);
@@ -63,4 +64,6 @@ bool FastqIterator::next_fastq_element(FastqElement& element){
     getline(file, element.quality_string);
 
     return true;
+}
+
 }

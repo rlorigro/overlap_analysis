@@ -44,6 +44,8 @@ using std::cout;
 typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
 
+using overlap_analysis::RegionalOverlapMap;
+
 
 /// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md using the following data:
 ///
@@ -59,11 +61,11 @@ void load_paf_as_overlap_map(
         path paf_path,
         uint32_string_bimap& id_vs_name,
         RegionalOverlapMap& overlap_map,
-        uint32_t min_quality){
+        uint32_t min_quality) {
 
     ifstream paf_file(paf_path);
 
-    if (not paf_file.good()){
+    if (not paf_file.good()) {
         throw runtime_error("ERROR: could not open input file: " + paf_path.string());
     }
 
@@ -82,17 +84,13 @@ void load_paf_as_overlap_map(
         if (c == '\t') {
             if (n_delimiters == 0) {
                 read_name = token;
-            }
-            else if (n_delimiters == 5) {
+            } else if (n_delimiters == 5) {
                 region_name = token;
-            }
-            else if (n_delimiters == 7) {
+            } else if (n_delimiters == 7) {
                 start = stoi(token);
-            }
-            else if (n_delimiters == 8) {
+            } else if (n_delimiters == 8) {
                 stop = stoi(token);
-            }
-            else if (n_delimiters == 11) {
+            } else if (n_delimiters == 11) {
                 quality = stoi(token);
 
                 if (quality >= min_quality) {
@@ -104,8 +102,8 @@ void load_paf_as_overlap_map(
                     if (result != id_vs_name.right.end()) {
                         id = result->second;
                     }
-                    // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
-                    else{
+                        // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
+                    else {
                         id = id_vs_name.size();
                         id_vs_name.insert(bimap_pair(id, read_name));
                     }
@@ -116,31 +114,31 @@ void load_paf_as_overlap_map(
 
             token.resize(0);
             n_delimiters++;
-        }
-        else if (c == '\n'){
-            if (n_delimiters < 11){
-                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " + to_string(n_lines));
+        } else if (c == '\n') {
+            if (n_delimiters < 11) {
+                throw runtime_error(
+                        "ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " +
+                        to_string(n_lines));
             }
 
             token.resize(0);
             n_delimiters = 0;
             n_lines++;
-        }
-        else {
+        } else {
             token += c;
         }
     }
 }
 
 
-void find_overlapping_alignments(path paf_path){
+void find_overlapping_alignments(path paf_path) {
     uint32_string_bimap id_vs_name;
     RegionalOverlapMap overlap_map;
     uint32_t min_quality = 10;
 
     load_paf_as_overlap_map(paf_path, id_vs_name, overlap_map, min_quality);
 
-    for (auto& item: id_vs_name){
+    for (auto& item: id_vs_name) {
         cout << item.get_left() << ',' << item.get_right() << '\n';
     }
     cout << '\n';
@@ -148,7 +146,8 @@ void find_overlapping_alignments(path paf_path){
 }
 
 
-int main(int argc, char* argv[]){
+
+int main(int argc, char* argv[]) {
     path paf_path;
 
     options_description options("Arguments:");
@@ -156,8 +155,7 @@ int main(int argc, char* argv[]){
     options.add_options()
             ("paf_path",
              value<path>(&paf_path)->required(),
-             "File path of PAF file containing alignments to some reference")
-    ;
+             "File path of PAF file containing alignments to some reference");
 
     variables_map vm;
     store(parse_command_line(argc, argv, options), vm);
@@ -173,4 +171,3 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
-

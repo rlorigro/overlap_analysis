@@ -14,6 +14,8 @@ using std::string;
 using std::vector;
 
 
+namespace overlap_analysis {
+
 double quality_char_to_error_probability(char q);
 
 
@@ -30,7 +32,7 @@ public:
 };
 
 
-class FastqIterator {
+class FastqIterator{
 public:
     /// Attributes ///
     const path file_path;
@@ -49,5 +51,6 @@ private:
 
 };
 
+}
 
 #endif //OVERLAP_ANALYSIS_FASTQITERATOR_HPP

@@ -4,6 +4,7 @@
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::path;
 
+using overlap_analysis::AlignmentChains;
 
 
 int main(){

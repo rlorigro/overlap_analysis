@@ -1,5 +1,6 @@
 #include "OverlapMap.hpp"
 #include "PafElement.hpp"
+#include "Graph.hpp"
 #include "graph_utils.hpp"
 
 #include "boost/program_options.hpp"
@@ -10,19 +11,6 @@ using boost::program_options::variables_map;
 using boost::program_options::bool_switch;
 using boost::program_options::value;
 using boost::bimap;
-
-#include <ogdf/basic/GraphAttributes.h>
-#include <ogdf/basic/graphics.h>
-#include <ogdf/energybased/FMMMLayout.h>
-#include <ogdf/fileformats/GraphIO.h>
-
-using ogdf::Graph;
-using ogdf::GraphAttributes;
-using ogdf::node;
-using ogdf::edge;
-using ogdf::FMMMLayout;
-using ogdf::FMMMOptions;
-using ogdf::Shape;
 
 #include <experimental/filesystem>
 #include <unordered_map>
@@ -51,6 +39,8 @@ using std::cout;
 typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
 
+
+namespace overlap_analysis {
 
 /// Given an overlap map with the structure: [interval_start, interval_stop) -> {read_id_0, read_id_1, ... },
 /// build the edges of a graph, one edge for each inferred overlap.
@@ -84,8 +74,7 @@ typedef uint32_string_bimap::value_type bimap_pair;
 ///
 void create_graph_edges_from_overlap_map(
         RegionalOverlapMap& overlap_map,
-        ogdf::Graph& graph,
-        vector<node>& nodes){
+        DoubleStrandedGraph& graph) {
 
     set<uint32_t> empty_set = {};
 
@@ -108,30 +97,8 @@ void create_graph_edges_from_overlap_map(
                 if (prev_read_set.count(id) == 0){
                     for (const auto& other_id: read_set){
                         if (other_id != id){
-                            // Don't duplicate edges
-                            if (graph.searchEdge(nodes[id], nodes[other_id]) == nullptr){
-//                                cerr << "Creating edge: " << id << "->" << other_id << '\n';
-
-                                uint32_t flipped_id;
-                                uint32_t flipped_other_id;
-
-                                if (id % 2 == 0){
-                                    flipped_id = id + 1;
-                                }
-                                else{
-                                    flipped_id = id - 1;
-                                }
-
-                                if (other_id % 2 == 0){
-                                    flipped_other_id = other_id + 1;
-                                }
-                                else{
-                                    flipped_other_id = other_id - 1;
-                                }
-
-                                graph.newEdge(nodes[id], nodes[other_id]);
-                                graph.newEdge(nodes[flipped_id], nodes[flipped_other_id]);
-                            }
+                            // Will create the edge if it doesn't exist already
+                            graph.add_edge(id, other_id);
                         }
                     }
                 }
@@ -146,7 +113,6 @@ void create_graph_edges_from_overlap_map(
 }
 
 
-
 /// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md using the following data:
 ///
 /// Col (1-based)       Data                        Type
@@ -159,15 +125,13 @@ void create_graph_edges_from_overlap_map(
 ///
 void load_paf_as_graph(
         path paf_path,
-        uint32_string_bimap& id_vs_name,
         RegionalOverlapMap& overlap_map,
-        ogdf::Graph& graph,
-        vector<node>& nodes,
-        uint32_t min_quality){
+        DoubleStrandedGraph& graph,
+        uint32_t min_quality) {
 
     ifstream paf_file(paf_path);
 
-    if (not paf_file.good()){
+    if (not paf_file.good()) {
         throw runtime_error("ERROR: could not open input file: " + paf_path.string());
     }
 
@@ -177,73 +141,46 @@ void load_paf_as_graph(
     uint32_t start = 0;
     uint32_t stop = 0;
     uint32_t quality = 0;
-    uint32_t chain_score = 0;
     bool is_reverse = false;
 
     uint64_t n_delimiters = 0;
     uint64_t n_lines = 0;
     char c;
 
-    while (paf_file.get(c)) {
+    while (paf_file.get(c)){
         if (c == '\t') {
-            if (n_delimiters == 0) {
+            if (n_delimiters == 0){
                 read_name = token;
             }
-            else if (n_delimiters == 4) {
+            else if (n_delimiters == 4){
                 is_reverse = (token == "-");
             }
-            else if (n_delimiters == 5) {
+            else if (n_delimiters == 5){
                 region_name = token;
             }
-            else if (n_delimiters == 7) {
+            else if (n_delimiters == 7){
                 start = stoi(token);
             }
-            else if (n_delimiters == 8) {
+            else if (n_delimiters == 8){
                 stop = stoi(token);
             }
-            else if (n_delimiters == 11) {
+            else if (n_delimiters == 11){
                 quality = stoi(token);
-            }
-            else if (n_delimiters == 13) {
-                chain_score = stoi(token.substr(5,token.size()-5));
 
-                //                cerr << region_name << " " << start << " " << stop << '\n';
-
-                if (quality >= min_quality) {
-                    auto result = id_vs_name.right.find(read_name);
+                if (quality >= min_quality){
                     uint32_t id;
                     uint32_t forward_id;
                     uint32_t reverse_id;
 
-                    // The bimap for id <-> name is not necessarily initialized for this read.
-                    // If it does exist, then just fetch the ID
-                    if (result != id_vs_name.right.end()) {
-                        id = result->second;
-                    }
-                        // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
-                    else{
-                        id = id_vs_name.size();
-                        id_vs_name.insert(bimap_pair(id, read_name));
-                    }
+                    id = graph.add_node(read_name);
 
-                    forward_id = 2*id;
-                    reverse_id = 2*id + 1;
+                    forward_id = 2 * id;
+                    reverse_id = 2 * id + 1;
 
                     if (not is_reverse) {
                         overlap_map.insert(region_name, start, stop, forward_id);
-                    }
-                    else {
+                    } else {
                         overlap_map.insert(region_name, start, stop, reverse_id);
-                    }
-
-                    // In the case where a new read has just been encountered, add it to the end of the nodes list,
-                    // which should maintain size = bimap.size()
-                    if (reverse_id >= nodes.size()){
-                        // Forward
-                        nodes.emplace_back(graph.newNode());
-
-                        // Reverse
-                        nodes.emplace_back(graph.newNode());
                     }
                 }
             }
@@ -252,8 +189,10 @@ void load_paf_as_graph(
             n_delimiters++;
         }
         else if (c == '\n'){
-            if (n_delimiters < 13){
-                throw runtime_error("ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " + to_string(n_lines));
+            if (n_delimiters < 11){
+                throw runtime_error(
+                        "ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " +
+                        to_string(n_lines));
             }
 
             token.resize(0);
@@ -265,11 +204,11 @@ void load_paf_as_graph(
         }
     }
 
-    create_graph_edges_from_overlap_map(overlap_map, graph, nodes);
+    create_graph_edges_from_overlap_map(overlap_map, graph);
 }
 
 
-void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads){
+void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads) {
     ifstream file(excluded_reads_path);
     if (not file.good()){
         throw runtime_error("ERROR: excluded reads file could not be read: " + excluded_reads_path.string());
@@ -277,17 +216,15 @@ void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excl
 
     string line;
 
-    while(getline(file,line)){
-        excluded_reads.emplace(line.substr(0,line.size()));
+    while (getline(file, line)){
+        excluded_reads.emplace(line.substr(0, line.size()));
     }
 }
 
 
 void exclude_reads_from_graph(
-        Graph& graph,
-        vector<node>& nodes,
+        DoubleStrandedGraph& graph,
         path excluded_reads_path,
-        const uint32_string_bimap& id_vs_name,
         path output_path
 ){
     ofstream file(output_path);
@@ -298,132 +235,14 @@ void exclude_reads_from_graph(
     set<string> excluded_reads;
     load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
 
-    for (auto& name: excluded_reads){
-        size_t id;
-        auto result = id_vs_name.right.find(name);
-
-        if (result == id_vs_name.right.end()){
-            continue;
-        }
-        else{
-            id = result->second;
-        }
-
-        // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
-        uint32_t forward_id = 2*id;
-        uint32_t reverse_id = 2*id + 1;
-
-        if (nodes[forward_id] != nullptr) {
-            graph.delNode(nodes[forward_id]);
-            nodes[forward_id] = nullptr;
-        }
-        if (nodes[reverse_id] != nullptr) {
-            graph.delNode(nodes[reverse_id]);
-            nodes[reverse_id] = nullptr;
-        }
-
-        file << result->second << '\n';
+    for (const string& name: excluded_reads){
+        graph.remove_node(name);
+        file << name << '\n';
     }
 }
 
 
-void create_subgraph(
-        const Graph& graph,
-        Graph& subgraph,
-        uint32_string_bimap& id_vs_name,
-        uint32_string_bimap& subgraph_id_vs_name,
-        vector<node>& nodes,
-        vector<node>& subgraph_nodes,
-        string start_name,
-        uint32_t radius){
-
-    uint32_t start_id;
-    auto result = id_vs_name.right.find(start_name);
-
-    if (result == id_vs_name.right.end()){
-        throw runtime_error("ERROR: subgraph start node " + start_name + " not found in graph");
-    }
-    else{
-        start_id = result->second;
-    }
-
-    uint32_t forward_start_id = 2*start_id;
-    uint32_t reverse_start_id = 2*start_id + 1;
-
-    queue <BfsQueueElement> q;
-    unordered_map <size_t, size_t> distance;
-
-    // Make new nodes for the subgraph
-    auto forward_subgraph_start_node = subgraph.newNode();
-    auto reverse_subgraph_start_node = subgraph.newNode();
-
-    // Update the subgraph nodes list and Keep track of the name that the subgraph node should map to
-    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), start_name + '+'));
-    subgraph_nodes.emplace_back(forward_subgraph_start_node);
-
-    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), start_name + '-'));
-    subgraph_nodes.emplace_back(reverse_subgraph_start_node);
-
-    // Initialize the queue and make a new node for the forward and reverse nodes
-    q.emplace(nodes[forward_start_id], forward_subgraph_start_node);
-    q.emplace(nodes[reverse_start_id], reverse_subgraph_start_node);
-
-    // Update the distance map, which serves the double purpose of tracking which nodes are visited.
-    // This map tracks distance in the original graph, using the original IDs.
-    distance[forward_start_id] = 0;
-    distance[reverse_start_id] = 0;
-
-    while (not q.empty()){
-        auto item = q.front();
-
-        q.pop();
-
-        for (auto adjacent_element: item.original_node->adjEntries){
-            node other = adjacent_element->twinNode();
-            auto d = distance.at(item.original_node->index());
-
-            // If this node's distance would be <= radius, do the update
-            if (d < radius) {
-                uint32_t single_stranded_id = (other->index() - (other->index() % 2)) / 2;
-
-                // Find the name that corresponded to this node in the original graph
-                string name = id_vs_name.left.at(single_stranded_id);
-
-                // Create a directionally labeled name, because these nodes will be randomly ordered
-                // and their ID cant indicate strandedness
-                string subgraph_name = name + ((other->index() % 2 > 0)? "-" : "+");
-
-                // If it hasn't been visited before, create a new node and a new edge
-                if (distance.count(other->index()) == 0) {
-
-                    auto new_node = subgraph.newNode();
-                    subgraph.newEdge(item.subgraph_node, new_node);
-
-                    q.emplace(other, new_node);
-                    distance[other->index()] = d + 1;
-
-                    subgraph_id_vs_name.insert(bimap_pair(subgraph_nodes.size(), subgraph_name));
-                    subgraph_nodes.emplace_back(new_node);
-                }
-                // If it has been visited, just create a new edge
-                else{
-                    uint32_t id = subgraph_id_vs_name.right.at(subgraph_name);
-
-                    node a = item.subgraph_node;
-                    node b = subgraph_nodes[id];
-
-                    if (subgraph.searchEdge(a, b) == nullptr){
-                        subgraph.newEdge(a, b);
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-
-/// This method is useful for extracting subgraphs from a PAF, is implemented in a slow manner, though because
+/// This method is useful for extracting subgraphs from a PAF, is implemented in a slow manner though, because
 /// it re-iterates the PAF
 /// \param graph
 /// \param nodes
@@ -432,14 +251,11 @@ void create_subgraph(
 /// \param paf_path
 void write_all_read_alignments_as_paf(
         Graph& graph,
-        vector<node>& nodes,
-        uint32_string_bimap& id_vs_name,
-        bool double_stranded,
         path input_paf_path,
-        path output_paf_path){
+        path output_paf_path) {
 
     set<string> read_names;
-    get_all_read_names(graph, nodes, id_vs_name, double_stranded, true, read_names);
+    graph.get_all_read_names(read_names);
 
     string line;
     string read_name;
@@ -520,23 +336,17 @@ void plot_graph(
             subgraph_node_name,
             subgraph_radius);
 
-    path svg_path = output_directory / "double_stranded_overlap_graph.svg";
-
-    bool double_stranded_labeling = true;
-    uint32_string_bimap id_vs_name;
-
     RegionalOverlapMap overlap_map;
-    Graph overlap_graph;
-    vector<node> nodes;
+    DoubleStrandedGraph overlap_graph;
 
     cerr << "Loading PAF as graph...\n";
-    load_paf_as_graph(paf_path, id_vs_name, overlap_map, overlap_graph, nodes, min_quality);
+    load_paf_as_graph(paf_path, overlap_map, overlap_graph, min_quality);
 
     // Delete any nodes from the graph if a list of reads to be excluded is provided
     if (not excluded_reads_path.empty()){
         cerr << "Excluding reads...\n";
         path reads_excluded_log_path = output_directory / "reads_excluded.txt";
-        exclude_reads_from_graph(overlap_graph, nodes, excluded_reads_path, id_vs_name, reads_excluded_log_path);
+        exclude_reads_from_graph(overlap_graph, excluded_reads_path, reads_excluded_log_path);
     }
 
     // Do subgraph extraction if a node was provided as a start point for BFS
@@ -546,55 +356,27 @@ void plot_graph(
         path subgraph_paf_path = output_directory / "subgraph.paf";
 
         Graph subgraph;
-        uint32_string_bimap subgraph_id_vs_name;
-        vector<node> subgraph_nodes;
 
-        create_subgraph(
-                overlap_graph,
-                subgraph,
-                id_vs_name,
-                subgraph_id_vs_name,
-                nodes,
-                subgraph_nodes,
-                subgraph_node_name,
-                subgraph_radius);
-
-        overlap_graph = subgraph;
-        nodes = subgraph_nodes;
-        id_vs_name = subgraph_id_vs_name;
-
-        double_stranded_labeling = false;
+        overlap_graph.create_subgraph(subgraph_node_name, subgraph_radius, subgraph);
 
         // If the user specified a subgraph then it may be useful to write out the subgraph PAF as well
         write_all_read_alignments_as_paf(
-                overlap_graph,
-                nodes,
-                id_vs_name,
-                double_stranded_labeling,
+                subgraph,
                 paf_path,
                 subgraph_paf_path);
-    }
 
-    cerr << "Assigning graph visual attributes...\n";
-    GraphAttributes graph_attributes;
-    assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
-
-    if (label_type == 1) {
-        // Type 1 is to directly print the labels in the SVG
-        assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling);
+        render_graph(subgraph, label_type, output_directory);
     }
-    else{
-        // Type 2 prints only integer IDs and then creates a lookup table CSV separately for ID:name
-        path label_csv_path = output_directory / "node_names.csv";
-        assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name, double_stranded_labeling, label_csv_path);
+    else {
+        render_graph(overlap_graph, label_type, output_directory);
     }
-
-    cerr << "Computing graph layout and saving SVG\n";
-    write_graph_to_svg(overlap_graph, graph_attributes, svg_path);
 }
 
+}
 
-pair<string, uint32_t> parse_subgraph_argument(string subgraph_argument){
+using overlap_analysis::plot_graph;
+
+pair<string, uint32_t> parse_subgraph_argument(string subgraph_argument) {
     char delimiter = ':';
     string token;
     string name;

@@ -44,6 +44,9 @@ using std::cout;
 typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
 
+using overlap_analysis::RegionalOverlapMap;
+using overlap_analysis::PafElement;
+
 
 uint32_t load_csv_as_id_map(path& read_csv_path, uint32_string_bimap& id_vs_name){
     ///
@@ -717,6 +720,55 @@ void exclude_reads_from_graph(
     }
 }
 
+void assign_default_graph_rendering_attributes(Graph& graph, GraphAttributes& graph_attributes){
+    graph_attributes = GraphAttributes(
+            graph,
+            GraphAttributes::nodeGraphics |
+            GraphAttributes::edgeGraphics |
+            GraphAttributes::edgeStyle |
+            GraphAttributes::nodeStyle |
+            GraphAttributes::nodeTemplate);
+
+    uint32_t node_diameter = 8;
+    ogdf::Color edge_color(20, 20, 20, 255);
+
+    for (auto node: graph.nodes){
+        if (node == nullptr){
+            continue;
+        }
+
+        graph_attributes.shape(node) = ogdf::Shape::Ellipse;
+        graph_attributes.width(node) = node_diameter;
+        graph_attributes.height(node) = node_diameter;
+    }
+
+    for (auto edge: graph.edges){
+        graph_attributes.strokeColor(edge) = edge_color;
+        graph_attributes.strokeWidth(edge) = 0.3;
+    }
+
+}
+
+
+void write_graph_to_svg(GraphAttributes& graph_attributes, path output_path) {
+
+    FMMMLayout layout_engine;
+    layout_engine.useHighLevelOptions(true);
+    layout_engine.unitEdgeLength(40.0);
+    layout_engine.newInitialPlacement(true);
+    layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
+
+//    cerr << layout_engine.springStrength() << '\n';
+
+    layout_engine.call(graph_attributes);
+
+    graph_attributes.directed() = false;
+
+    cerr << "Writing svg: " << output_path << '\n';
+
+    ogdf::GraphIO::write(graph_attributes, output_path, ogdf::GraphIO::drawSVG);
+}
+
 
 void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path, path excluded_reads_path, path output_path) {
     path output_directory = output_path.parent_path();
@@ -748,12 +800,12 @@ void label_alignment_info(path info_csv_path, path read_csv_path, path paf_path,
     assign_default_graph_rendering_attributes(overlap_graph, graph_attributes);
 //    assign_graph_node_labels(overlap_graph, graph_attributes, nodes, id_vs_name);
 
-    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph.svg");
+    write_graph_to_svg(graph_attributes, "reference_overlap_graph.svg");
 
 //    add_false_positive_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
     add_read_graph_edges_to_graph(info_csv_path, overlap_graph, graph_attributes, nodes, paf_table, id_vs_name);
 
-    write_graph_to_svg(overlap_graph, graph_attributes, "reference_overlap_graph_with_readgraph_edges.svg");
+    write_graph_to_svg(graph_attributes, "reference_overlap_graph_with_readgraph_edges.svg");
 }
 
 

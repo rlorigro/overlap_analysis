@@ -10,10 +10,13 @@ using std::cerr;
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics.hpp>
 
-
 using namespace boost::accumulators;
 
 typedef accumulator_set<float, features<tag::count, tag::mean, tag::variance>> stats_accumulator;
+
+using overlap_analysis::quality_char_to_error_probability;
+using overlap_analysis::FastqIterator;
+using overlap_analysis::FastqElement;
 
 
 bool classify_palindromic_q_scores(span<char> qualities){

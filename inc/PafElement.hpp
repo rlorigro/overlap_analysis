@@ -5,6 +5,7 @@
 
 using std::string;
 
+namespace overlap_analysis {
 
 class PafElement {
 public:
@@ -17,5 +18,6 @@ public:
     PafElement(string target_name, uint32_t start, uint32_t stop, uint32_t quality);
 };
 
+}
 
 #endif //OVERLAP_ANALYSIS_PAFELEMENT_HPP

@@ -32,6 +32,10 @@ using boost::program_options::variables_map;
 using boost::program_options::bool_switch;
 using boost::program_options::value;
 
+using overlap_analysis::AlignmentChains;
+using overlap_analysis::AlignmentChain;
+using overlap_analysis::ChainElement;
+
 
 bool chain_is_palindromic(const AlignmentChain& chain, const pair <size_t, size_t>& bounds){
     bool is_palindromic = false;
