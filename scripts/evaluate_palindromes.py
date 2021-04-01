@@ -23,7 +23,7 @@ def main(shasta_path, fastq_path, s3_path, dry):
         "--assemblyDirectory", output_directory,
         "--Reads.minReadLength", "10000",
         "--command", "filterReads",
-        "--Reads.PalindromicReadOptions.detectOnFastqLoad",
+        "--Reads.PalindromicReads.detectOnFastqLoad",
         "--Reads.palindromicReads.nearDiagonalFractionThreshold", "0",
         "--Reads.palindromicReads.maxSkip", "150",
         "--Reads.palindromicReads.maxDrift", "150",
