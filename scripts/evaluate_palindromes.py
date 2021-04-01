@@ -9,7 +9,8 @@ def main(shasta_path, fastq_path, s3_path, dry):
     fastq_filename = os.path.basename(fastq_path)
     fastq_prefix = os.path.splitext(fastq_filename)[0]
     fastq_directory = os.path.dirname(fastq_path)
-    output_directory = os.path.join(fastq_directory, fastq_prefix + "_palindromes/")
+    output_name = fastq_prefix + "_palindromes/"
+    output_directory = os.path.join(fastq_directory, output_name)
 
     print(fastq_path)
     print(fastq_filename)
@@ -37,7 +38,7 @@ def main(shasta_path, fastq_path, s3_path, dry):
         "aws", "s3", "cp",
         "--recursive",
         output_directory,
-        s3_path
+        os.path.join(s3_path, output_name)
     ]
 
     if dry:
