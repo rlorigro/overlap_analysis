@@ -4,18 +4,13 @@ import sys
 import os
 
 
-def main(shasta_path, fastq_path, s3_path, dry):
+def run_evaluation(shasta_path, fastq_path, s3_path, dry):
     fastq_path = os.path.abspath(fastq_path)
     fastq_filename = os.path.basename(fastq_path)
     fastq_prefix = os.path.splitext(fastq_filename)[0]
     fastq_directory = os.path.dirname(fastq_path)
     output_name = fastq_prefix + "_palindromes/"
     output_directory = os.path.join(fastq_directory, output_name)
-
-    print(fastq_path)
-    print(fastq_filename)
-    print(fastq_prefix)
-    print(output_directory)
 
     shasta_args = [
         shasta_path,
@@ -47,6 +42,12 @@ def main(shasta_path, fastq_path, s3_path, dry):
     run(aws_args, check=True)
 
 
+def main(shasta_path, fastq_paths, s3_path, dry):
+    for path in fastq_paths.split(','):
+        run_evaluation(shasta_path=shasta_path, fastq_path=path, s3_path=s3_path, dry=dry)
+        print()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         "--shasta","-s",
         type=str,
         required=True,
-        help="path of shasta binary file to use"
+        help="Path of shasta binary file to use. Can also be a comma separated list of paths"
     )
 
     parser.add_argument(
@@ -83,7 +84,7 @@ if __name__ == "__main__":
 
     main(
         shasta_path=args.shasta,
-        fastq_path=args.input,
+        fastq_paths=args.input,
         s3_path=args.s3,
         dry=args.dry,
     )
