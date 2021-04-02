@@ -295,5 +295,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(
-        fastq_pathargs.i,
+        fastq_path=args.i,
     )
