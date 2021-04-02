@@ -4,6 +4,7 @@ from multiprocessing import cpu_count
 from matplotlib import pyplot
 from matplotlib import cm
 from subprocess import run
+import argparse
 import numpy
 import mmap
 import os
@@ -224,8 +225,7 @@ def generate_quality_plot(qualities_string, title, output_directory):
     pyplot.savefig(os.path.join(output_directory, title+"_quality.png"), dpi=200)
 
 
-def main():
-    fastq_path = "/home/ryan/data/nanopore/human/test/cross_strand_analysis/whole_flowcell/palindromes.fastq"
+def main(fastq_path):
     faidx_path = build_index(fastq_path)
 
     output_directory = os.path.join(os.path.dirname(fastq_path), "plots")
@@ -283,4 +283,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-i",
+        type=str,
+        required=True,
+        help="path of fastq file"
+    )
+
+    args = parser.parse_args()
+
+    main(
+        a_path=args.i,
+    )
