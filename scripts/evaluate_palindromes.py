@@ -4,7 +4,7 @@ import sys
 import os
 
 
-def run_evaluation(shasta_path, fastq_path, s3_path, dry):
+def run_evaluation(shasta_path, fastq_path, s3_path, use_quality, dry):
     fastq_path = os.path.abspath(fastq_path)
     fastq_filename = os.path.basename(fastq_path)
     fastq_prefix = os.path.splitext(fastq_filename)[0]
@@ -18,13 +18,16 @@ def run_evaluation(shasta_path, fastq_path, s3_path, dry):
         "--assemblyDirectory", output_directory,
         "--Reads.minReadLength", "10000",
         "--command", "filterReads",
-        "--Reads.palindromicReads.detectOnFastqLoad",
         "--Reads.palindromicReads.nearDiagonalFractionThreshold", "0",
         "--Reads.palindromicReads.maxSkip", "150",
         "--Reads.palindromicReads.maxDrift", "150",
     ]
 
+    if use_quality:
+        shasta_args.append("--Reads.palindromicReads.detectOnFastqLoad")
+
     if dry:
+        print()
         shasta_args = ["echo"] + shasta_args
 
     run(shasta_args, check=True)
@@ -37,14 +40,15 @@ def run_evaluation(shasta_path, fastq_path, s3_path, dry):
     ]
 
     if dry:
+        print()
         aws_args = ["echo"] + aws_args
 
     run(aws_args, check=True)
 
 
-def main(shasta_path, fastq_paths, s3_path, dry):
+def main(shasta_path, fastq_paths, s3_path, use_quality, dry):
     for path in fastq_paths.split(','):
-        run_evaluation(shasta_path=shasta_path, fastq_path=path, s3_path=s3_path, dry=dry)
+        run_evaluation(shasta_path=shasta_path, fastq_path=path, s3_path=s3_path, use_quality=use_quality, dry=dry)
         print()
 
 
@@ -73,6 +77,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--use_quality","-q",
+        dest="use_quality",
+        action="store_true",
+        required=False,
+        help="echo the commands instead of executing them"
+    )
+
+    parser.add_argument(
         "--dry",
         dest="dry",
         action="store_true",
@@ -86,5 +98,6 @@ if __name__ == "__main__":
         shasta_path=args.shasta,
         fastq_paths=args.input,
         s3_path=args.s3,
+        use_quality=args.use_quality,
         dry=args.dry,
     )
