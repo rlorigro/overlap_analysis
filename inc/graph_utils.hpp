@@ -32,6 +32,7 @@ using ogdf::Shape;
 #include <vector>
 
 using std::experimental::filesystem::create_directories;
+using std::experimental::filesystem::exists;
 using std::experimental::filesystem::path;
 using std::runtime_error;
 using std::ifstream;
@@ -48,8 +49,12 @@ typedef uint32_string_bimap::value_type bimap_pair;
 
 namespace overlap_analysis {
 
-template<class T> void render_graph(T& graph, uint16_t label_type, path output_directory) {
-    path svg_path = output_directory / "double_stranded_overlap_graph.svg";
+template<class T> void render_graph(T& graph, uint16_t label_type, path output_directory, string name="graph") {
+    path svg_path = output_directory / (name + ".svg");
+
+    if (not exists(output_directory)){
+        throw runtime_error("ERROR: output directory does not exist: " + output_directory.string());
+    }
 
     cerr << "Assigning graph visual attributes...\n";
     graph.assign_default_graph_rendering_attributes();

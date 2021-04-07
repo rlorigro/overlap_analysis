@@ -78,6 +78,7 @@ public:
 
     /// Methods ///
     virtual void assign_graph_node_labels(path output_path)=0;
+    virtual bool has_edge(const string& a, const string& b) const=0;
 
     void assign_default_graph_rendering_attributes();
     void write_graph_to_svg(path output_path);
@@ -93,6 +94,8 @@ public:
     Graph()=default;
     void get_all_read_names(set<string>& read_names);
     void assign_graph_node_labels(path output_path="");
+
+    bool has_edge(const string& a, const string& b) const;
 };
 
 
@@ -106,14 +109,49 @@ public:
     void add_edge(uint32_t a, uint32_t b);
     bool remove_node(const string& name);
 
-    uint32_t get_forward_id(uint32_t id);
-    uint32_t get_reverse_id(uint32_t id);
+    uint32_t get_forward_id(uint32_t id) const;
+    uint32_t get_reverse_id(uint32_t id) const;
 
     void get_all_read_names(set<string>& read_names);
     void assign_graph_node_labels(path output_path="");
 
+    bool has_edge(const string& a, const string& b) const;
+
     void create_subgraph(const string& start_name, uint32_t radius, Graph& subgraph);
 };
+
+
+class GraphDiff{
+public:
+    /// Attributes ///
+    const UndirectedGraph& graph_a;
+    const UndirectedGraph& graph_b;
+    set <edge> a_only_edges;
+    set <edge> b_only_edges;
+    set <edge> a_both_edges;
+    set <edge> b_both_edges;
+
+    /// Methods ///
+    GraphDiff(const UndirectedGraph& a, const UndirectedGraph& b);
+};
+
+
+ostream& operator<<(ostream& o, GraphDiff& g);
+
+
+void create_graph_edges_from_overlap_map(
+        RegionalOverlapMap& overlap_map,
+        DoubleStrandedGraph& graph);
+
+
+void load_paf_as_graph(
+        path paf_path,
+        RegionalOverlapMap& overlap_map,
+        DoubleStrandedGraph& graph,
+        uint32_t min_quality);
+
+
+void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph);
 
 
 }

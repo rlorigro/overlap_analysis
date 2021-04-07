@@ -39,12 +39,12 @@ bool DoubleStrandedGraph::remove_node(const string& name){
 }
 
 
-uint32_t DoubleStrandedGraph::get_forward_id(uint32_t id){
+uint32_t DoubleStrandedGraph::get_forward_id(uint32_t id) const{
     return 2*id;
 }
 
 
-uint32_t DoubleStrandedGraph::get_reverse_id(uint32_t id){
+uint32_t DoubleStrandedGraph::get_reverse_id(uint32_t id) const{
     return 2*id + 1;
 }
 
@@ -78,6 +78,50 @@ uint32_t DoubleStrandedGraph::add_node(const string& read_name){
     }
 
     return id;
+}
+
+
+bool DoubleStrandedGraph::has_edge(const string& a, const string& b) const{
+    bool result = true;
+
+    auto a_iter = id_vs_name.right.find(a);
+    auto b_iter = id_vs_name.right.find(b);
+
+    if (a_iter == id_vs_name.right.end() or b_iter == id_vs_name.right.end()){
+        result = false;
+    }
+    else {
+        auto a_id = get_forward_id(a_iter->second);
+        auto b_id = get_forward_id(b_iter->second);
+
+        if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
+            result = false;
+        }
+    }
+
+    return result;
+}
+
+
+bool Graph::has_edge(const string& a, const string& b) const{
+    bool result = true;
+
+    auto a_iter = id_vs_name.right.find(a);
+    auto b_iter = id_vs_name.right.find(b);
+
+    if (a_iter == id_vs_name.right.end() or b_iter == id_vs_name.right.end()){
+        result = false;
+    }
+    else {
+        auto a_id = a_iter->second;
+        auto b_id = b_iter->second;
+
+        if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
+            result = false;
+        }
+    }
+
+    return result;
 }
 
 
@@ -304,10 +348,8 @@ void DoubleStrandedGraph::assign_graph_node_labels(path output_path){
     graph_attributes.addAttributes(GraphAttributes::nodeLabel);
 
     for (size_t id=0; id<nodes.size(); id++){
-        auto single_stranded_id = id;
-
-        // If specified, undo the even/odd encoding scheme to reduce multiple node ids to a single mapping id->name
-        single_stranded_id = (id - (id % 2)) / 2;
+        // Undo the even/odd encoding scheme to reduce multiple node ids to a single mapping id->name
+        auto single_stranded_id = (id - (id % 2)) / 2;
 
         if (nodes[id] == nullptr){
             continue;
@@ -363,6 +405,285 @@ void Graph::assign_graph_node_labels(path output_path){
             file << id << ',' << label << '\n';
         }
     }
+}
+
+
+
+/// Given an overlap map with the structure: [interval_start, interval_stop) -> {read_id_0, read_id_1, ... },
+/// build the edges of a graph, one edge for each inferred overlap.
+/// Graph must have existing nodes, stored by the read ID in a vector.
+///
+/// Method:
+/// Iterate the sets and add any edges that don't exist yet in the graph
+///
+/// Case 1:
+/// s1 = {a,b,c}
+/// s2 = {a,b,c,d}
+///
+/// s2 - s1 = {d}
+/// add all edges from (s2 - s1) -> s2
+///
+///
+/// Case 2:
+/// s1 = {a,b,c,d}
+/// s2 = {a,b,c}
+///
+/// s2 - s1 = {}
+/// Do nothing
+///
+///
+/// Case 3:
+/// s1 = {a,b,c}
+/// s2 = {a,b,d}
+///
+/// s2 - s1 = {d}
+/// add all edges from (s2 - s1) -> s2
+///
+void create_graph_edges_from_overlap_map(
+        RegionalOverlapMap& overlap_map,
+        DoubleStrandedGraph& graph) {
+
+    set<uint32_t> empty_set = {};
+
+    for (auto& item: overlap_map.intervals){
+        const auto& overlaps = item.second;
+        auto& prev_read_set = empty_set;
+
+        for (auto i = begin(overlaps), e = end(overlaps); i!=e; ++i){
+//            const auto& interval = i->first;
+            auto& read_set = i->second;
+
+//            cerr << interval << " -> ";
+//            for (const auto& id: read_set){
+//                cerr << id << " " ;
+//            }
+//            cerr << '\n';
+
+            for (const auto& id: read_set){
+                // If this read id is not in the previous set, it indicates that more edges need to be built
+                if (prev_read_set.count(id) == 0){
+                    for (const auto& other_id: read_set){
+                        if (other_id != id){
+                            // Will create the edge if it doesn't exist already
+                            graph.add_edge(id, other_id);
+                        }
+                    }
+                }
+            }
+//            cerr << '\n';
+
+            prev_read_set = read_set;
+        }
+    }
+//    cerr << '\n';
+
+}
+
+
+/// Parse a PAF file: https://github.com/lh3/miniasm/blob/master/PAF.md using the following data:
+///
+/// Col (1-based)       Data                        Type
+/// -------------       ----                        ----
+/// 1                   "Query sequence name"       string (assumed to be numeric for this project, using ONT reads)
+/// 6                   "Target sequence name"      string
+/// 8                   "Target start..."           int
+/// 9                   "Target end..."             int
+/// 12                  "Mapping quality"           int
+///
+void load_paf_as_graph(
+        path paf_path,
+        RegionalOverlapMap& overlap_map,
+        DoubleStrandedGraph& graph,
+        uint32_t min_quality) {
+
+    ifstream paf_file(paf_path);
+
+    if (not paf_file.good()) {
+        throw runtime_error("ERROR: could not open input file: " + paf_path.string());
+    }
+
+    string token;
+    string region_name;
+    string read_name;
+    uint32_t start = 0;
+    uint32_t stop = 0;
+    uint32_t quality = 0;
+    bool is_reverse = false;
+
+    uint64_t n_delimiters = 0;
+    uint64_t n_lines = 0;
+    char c;
+
+    while (paf_file.get(c)){
+        if (c == '\t') {
+            if (n_delimiters == 0){
+                read_name = token;
+            }
+            else if (n_delimiters == 4){
+                is_reverse = (token == "-");
+            }
+            else if (n_delimiters == 5){
+                region_name = token;
+            }
+            else if (n_delimiters == 7){
+                start = stoi(token);
+            }
+            else if (n_delimiters == 8){
+                stop = stoi(token);
+            }
+            else if (n_delimiters == 11){
+                quality = stoi(token);
+
+                if (quality >= min_quality){
+                    uint32_t id;
+                    uint32_t forward_id;
+                    uint32_t reverse_id;
+
+                    id = graph.add_node(read_name);
+
+                    forward_id = 2 * id;
+                    reverse_id = 2 * id + 1;
+
+                    if (not is_reverse) {
+                        overlap_map.insert(region_name, start, stop, forward_id);
+                    } else {
+                        overlap_map.insert(region_name, start, stop, reverse_id);
+                    }
+                }
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            if (n_delimiters < 11){
+                throw runtime_error(
+                        "ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " +
+                        to_string(n_lines));
+            }
+
+            token.resize(0);
+            n_delimiters = 0;
+            n_lines++;
+        }
+        else {
+            token += c;
+        }
+    }
+
+    create_graph_edges_from_overlap_map(overlap_map, graph);
+}
+
+
+void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph){
+    ifstream file(adjacency_path);
+
+    if (not file.good()){
+        throw runtime_error("ERROR: could not read file: " + adjacency_path.string());
+    }
+
+    uint32_t n_delimiters = 0;
+    uint32_t n_lines = 0;
+    string token;
+    string name_a;
+    string name_b;
+    bool cross_strand;
+    char c;
+
+    while (file.get(c)){
+        if (c == ',') {
+            if (n_delimiters == 0){
+                name_a = token;
+            }
+            else if (n_delimiters == 1){
+                name_b = token;
+            }
+            else if (n_delimiters == 2){
+                cross_strand = (token == "Yes");
+
+                auto id_a = graph.add_node(name_a);
+                auto id_b = graph.add_node(name_b);
+
+                if (not cross_strand) {
+                    graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
+                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
+                }
+                else{
+                    graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
+                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
+                }
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            if (n_delimiters < 2){
+                throw runtime_error(
+                        "ERROR: file provided does not contain sufficient delimiters to be adjacency csv at line: " +
+                        to_string(n_lines));
+            }
+
+            token.resize(0);
+            n_delimiters = 0;
+            n_lines++;
+        }
+        else {
+            token += c;
+        }
+    }
+}
+
+
+/// Dumb brute force search to compare edges in 2 graphs
+/// A better method might be a joint BFS
+GraphDiff::GraphDiff(const UndirectedGraph& a, const UndirectedGraph& b):
+        graph_a(a),
+        graph_b(b)
+{
+    for (auto edge: graph_a.graph.edges){
+        auto nodes = edge->nodes();
+        auto id0 = nodes[0]->index();
+        auto id1 = nodes[1]->index();
+
+        const auto& name0 = graph_a.id_vs_name.left.at(id0);
+        const auto& name1 = graph_a.id_vs_name.left.at(id1);
+
+        cerr << name0 << ' ' << name1 << '\n';
+
+        if (graph_b.has_edge(name0, name1)){
+            a_both_edges.insert(edge);
+        }
+        else{
+            a_only_edges.insert(edge);
+        }
+    }
+
+    for (auto edge: graph_b.graph.edges){
+        auto nodes = edge->nodes();
+        auto id0 = nodes[0]->index();
+        auto id1 = nodes[1]->index();
+
+        const auto& name0 = graph_b.id_vs_name.left.at(id0);
+        const auto& name1 = graph_b.id_vs_name.left.at(id1);
+
+        if (graph_a.has_edge(name0, name1)){
+            b_both_edges.insert(edge);
+        }
+        else{
+            b_only_edges.insert(edge);
+        }
+    }
+}
+
+
+ostream& operator<<(ostream& o, GraphDiff& g){
+    o << g.a_only_edges.size() << '\n';
+    o << g.b_only_edges.size() << '\n';
+    o << g.b_both_edges.size() << '\n';
+    o << g.a_both_edges.size() << '\n';
+
+    return o;
 }
 
 
