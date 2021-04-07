@@ -228,7 +228,7 @@ def generate_quality_plot(qualities_string, title, output_directory):
 def main(fastq_path):
     faidx_path = build_index(fastq_path)
 
-    output_directory = os.path.join(os.path.dirname(fastq_path), "plots")
+    output_directory = os.path.splitext(fastq_path)[0] + "_plots/"
 
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
