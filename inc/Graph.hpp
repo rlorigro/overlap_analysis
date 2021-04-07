@@ -82,6 +82,8 @@ public:
 
     void assign_default_graph_rendering_attributes();
     void write_graph_to_svg(path output_path);
+
+    virtual uint32_t get_single_stranded_id(uint32_t id) const=0;
 };
 
 
@@ -96,6 +98,9 @@ public:
     void assign_graph_node_labels(path output_path="");
 
     bool has_edge(const string& a, const string& b) const;
+
+    // Not strictly needed except for methods that also accept double stranded graphs
+    uint32_t get_single_stranded_id(uint32_t id) const;
 };
 
 
@@ -111,11 +116,16 @@ public:
 
     uint32_t get_forward_id(uint32_t id) const;
     uint32_t get_reverse_id(uint32_t id) const;
+    uint32_t get_single_stranded_id(uint32_t id) const;
+    uint32_t get_double_stranded_id(uint32_t id, bool is_reverse) const;
 
     void get_all_read_names(set<string>& read_names);
     void assign_graph_node_labels(path output_path="");
 
     bool has_edge(const string& a, const string& b) const;
+    bool has_edge(const string& a, bool a_reversal, const string& b, bool b_reversal) const;
+
+    bool is_reverse(uint32_t id) const;
 
     void create_subgraph(const string& start_name, uint32_t radius, Graph& subgraph);
 };
@@ -132,7 +142,7 @@ public:
     set <edge> b_both_edges;
 
     /// Methods ///
-    GraphDiff(const UndirectedGraph& a, const UndirectedGraph& b);
+    GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b);
 };
 
 

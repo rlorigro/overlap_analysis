@@ -1,3 +1,4 @@
+#include "OverlapMap.hpp"
 #include "Graph.hpp"
 #include "graph_utils.hpp"
 
@@ -27,10 +28,15 @@ void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_qu
     RegionalOverlapMap _;
 
     if (file_path.extension().string() == ".csv"){
+        cerr << "Constructing graph from csv file...\n";
         load_adjacency_csv_as_graph(file_path, graph);
     }
     else if (file_path.extension().string() == ".paf"){
+        cerr << "Constructing graph from paf file...\n";
         load_paf_as_graph(file_path, _, graph, min_quality);
+    }
+    else{
+        throw runtime_error("ERROR: overlap format does not match 'csv' or 'paf' extension type");
     }
 }
 

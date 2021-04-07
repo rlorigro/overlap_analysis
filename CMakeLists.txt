@@ -50,12 +50,12 @@ include_directories(
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
         src/AlignmentChain.cpp
-        src/OverlapMap.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
         src/FastqIterator.cpp
         src/Graph.cpp
         src/graph_utils.cpp
+        src/OverlapMap.cpp
         src/PafElement.cpp
         src/Plot.cpp
         src/SequenceElement.cpp

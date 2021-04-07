@@ -1,3 +1,4 @@
+#include "OverlapMap.hpp"
 #include "Graph.hpp"
 
 
@@ -49,6 +50,26 @@ uint32_t DoubleStrandedGraph::get_reverse_id(uint32_t id) const{
 }
 
 
+uint32_t Graph::get_single_stranded_id(uint32_t id) const{
+    return id;
+}
+
+
+uint32_t DoubleStrandedGraph::get_single_stranded_id(uint32_t id) const{
+    return (id - (id % 2)) / 2;
+}
+
+
+bool DoubleStrandedGraph::is_reverse(uint32_t id) const{
+    return ((id % 2) == 1);
+}
+
+
+uint32_t DoubleStrandedGraph::get_double_stranded_id(uint32_t id, bool is_reverse) const{
+    return 2*id + is_reverse;
+}
+
+
 uint32_t DoubleStrandedGraph::add_node(const string& read_name){
     auto result = id_vs_name.right.find(read_name);
     uint32_t id;
@@ -93,6 +114,28 @@ bool DoubleStrandedGraph::has_edge(const string& a, const string& b) const{
     else {
         auto a_id = get_forward_id(a_iter->second);
         auto b_id = get_forward_id(b_iter->second);
+
+        if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
+            result = false;
+        }
+    }
+
+    return result;
+}
+
+
+bool DoubleStrandedGraph::has_edge(const string& a, bool a_reversal, const string& b, bool b_reversal) const{
+    bool result = true;
+
+    auto a_iter = id_vs_name.right.find(a);
+    auto b_iter = id_vs_name.right.find(b);
+
+    if (a_iter == id_vs_name.right.end() or b_iter == id_vs_name.right.end()){
+        result = false;
+    }
+    else {
+        auto a_id = get_double_stranded_id(a_iter->second, a_reversal);
+        auto b_id = get_double_stranded_id(b_iter->second, b_reversal);
 
         if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
             result = false;
@@ -587,7 +630,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
     string token;
     string name_a;
     string name_b;
-    bool cross_strand;
+    bool is_cross_strand;
+
     char c;
 
     while (file.get(c)){
@@ -599,19 +643,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                 name_b = token;
             }
             else if (n_delimiters == 2){
-                cross_strand = (token == "Yes");
-
-                auto id_a = graph.add_node(name_a);
-                auto id_b = graph.add_node(name_b);
-
-                if (not cross_strand) {
-                    graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
-                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
-                }
-                else{
-                    graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
-                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
-                }
+                // Depending on the format there may be more data after this token
+                is_cross_strand = (token == "Yes");
             }
 
             token.resize(0);
@@ -623,6 +656,24 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                         "ERROR: file provided does not contain sufficient delimiters to be adjacency csv at line: " +
                         to_string(n_lines));
             }
+            if (n_delimiters == 2){
+                is_cross_strand = (token == "Yes");
+            }
+
+            auto id_a = graph.add_node(name_a);
+            auto id_b = graph.add_node(name_b);
+
+            cerr << name_a << ' ' << name_b << ' ' << is_cross_strand << '\n';
+
+            if (not is_cross_strand) {
+                graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
+                graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
+            }
+            else{
+                graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
+                graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
+            }
+
 
             token.resize(0);
             n_delimiters = 0;
@@ -637,40 +688,56 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
 /// Dumb brute force search to compare edges in 2 graphs
 /// A better method might be a joint BFS
-GraphDiff::GraphDiff(const UndirectedGraph& a, const UndirectedGraph& b):
+GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b):
         graph_a(a),
         graph_b(b)
 {
-    for (auto edge: graph_a.graph.edges){
+    cerr << '\n';
+    for (auto edge: a.graph.edges){
         auto nodes = edge->nodes();
-        auto id0 = nodes[0]->index();
-        auto id1 = nodes[1]->index();
 
-        const auto& name0 = graph_a.id_vs_name.left.at(id0);
-        const auto& name1 = graph_a.id_vs_name.left.at(id1);
+        bool reversal0 = a.is_reverse(nodes[0]->index());
+        bool reversal1 = a.is_reverse(nodes[1]->index());
 
-        cerr << name0 << ' ' << name1 << '\n';
+        auto id0 = a.get_single_stranded_id(nodes[0]->index());
+        auto id1 = a.get_single_stranded_id(nodes[1]->index());
 
-        if (graph_b.has_edge(name0, name1)){
+        const auto& name0 = a.id_vs_name.left.at(id0);
+        const auto& name1 = a.id_vs_name.left.at(id1);
+
+        cerr << name0 << ' ' << name1 << ' ' << (reversal0 == reversal1) << '\n';
+
+        if (b.has_edge(name0, reversal0, name1, reversal1)){
+            cerr << "found" << '\n';
             a_both_edges.insert(edge);
         }
         else{
+            cerr << "NOT found" << '\n';
             a_only_edges.insert(edge);
         }
     }
 
-    for (auto edge: graph_b.graph.edges){
+    cerr << '\n';
+    for (auto edge: b.graph.edges){
         auto nodes = edge->nodes();
-        auto id0 = nodes[0]->index();
-        auto id1 = nodes[1]->index();
 
-        const auto& name0 = graph_b.id_vs_name.left.at(id0);
-        const auto& name1 = graph_b.id_vs_name.left.at(id1);
+        bool reversal0 = b.is_reverse(nodes[0]->index());
+        bool reversal1 = b.is_reverse(nodes[1]->index());
 
-        if (graph_a.has_edge(name0, name1)){
+        auto id0 = b.get_single_stranded_id(nodes[0]->index());
+        auto id1 = b.get_single_stranded_id(nodes[1]->index());
+
+        const auto& name0 = b.id_vs_name.left.at(id0);
+        const auto& name1 = b.id_vs_name.left.at(id1);
+
+        cerr << name0 << ' ' << name1 << ' ' << (reversal0 == reversal1) << '\n';
+
+        if (a.has_edge(name0, reversal0, name1, reversal1)){
+            cerr << "found" << '\n';
             b_both_edges.insert(edge);
         }
         else{
+            cerr << "NOT found" << '\n';
             b_only_edges.insert(edge);
         }
     }
