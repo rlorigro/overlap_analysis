@@ -57,7 +57,9 @@ set(SOURCES
         src/Graph.cpp
         src/graph_utils.cpp
         src/PafElement.cpp
+        src/Plot.cpp
         src/SequenceElement.cpp
+#        src/wavefront.cpp
         )
 
 project(overlap_analysis)
@@ -121,6 +123,27 @@ include_directories(external/ogdf/include/)
 
 message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
 
+
+##############################################
+# ------------------------------------------ #
+# -------- LINKING EXTERNAL LIBRARY -------- #
+# ------------------ ogdf ------------------ #
+# ------------------------------------------ #
+##############################################
+
+
+message (STATUS "Fetching external project seqan3")
+include (FetchContent)
+FetchContent_Declare (
+        seqan3_fetch_content
+        GIT_REPOSITORY "https://github.com/seqan/seqan3.git"
+        GIT_TAG "master"
+)
+
+# this will do the download, find_package(seqan3) and exposes seqan3::seqan3 at cmake configure time
+FetchContent_MakeAvailable (seqan3_fetch_content)
+
+
 ############################################
 # ---------------------------------------- #
 # -------- Generating executables -------- #
@@ -145,6 +168,9 @@ set(TESTS
         test_boost_interval_map
         test_chaining
         test_ogdf
+        test_gnuplot
+        test_seqan
+#        test_wf
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
@@ -156,6 +182,7 @@ foreach(FILENAME_PREFIX ${TESTS})
             stdc++fs
             ogdf
             coin
+            seqan3::seqan3
             )
 
 endforeach()
@@ -164,11 +191,13 @@ endforeach()
 # -------- EXECUTABLES --------
 
 set(EXECUTABLES
+        evaluate_overlaps
         filter_chimeras_from_paf
         filter_palindromes_by_quality
         find_overlapping_alignments
         label_alignment_info
         plot_alignment_as_double_stranded_graph
+#        self_align
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})
@@ -180,6 +209,7 @@ foreach(FILENAME_PREFIX ${EXECUTABLES})
             stdc++fs
             ogdf
             coin
+            seqan3::seqan3
             )
 endforeach()
 
