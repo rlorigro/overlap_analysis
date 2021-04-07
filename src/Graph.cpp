@@ -705,14 +705,10 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b)
         const auto& name0 = a.id_vs_name.left.at(id0);
         const auto& name1 = a.id_vs_name.left.at(id1);
 
-        cerr << name0 << ' ' << name1 << ' ' << (reversal0 == reversal1) << '\n';
-
         if (b.has_edge(name0, reversal0, name1, reversal1)){
-            cerr << "found" << '\n';
             a_both_edges.insert(edge);
         }
         else{
-            cerr << "NOT found" << '\n';
             a_only_edges.insert(edge);
         }
     }
@@ -730,14 +726,10 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b)
         const auto& name0 = b.id_vs_name.left.at(id0);
         const auto& name1 = b.id_vs_name.left.at(id1);
 
-        cerr << name0 << ' ' << name1 << ' ' << (reversal0 == reversal1) << '\n';
-
         if (a.has_edge(name0, reversal0, name1, reversal1)){
-            cerr << "found" << '\n';
             b_both_edges.insert(edge);
         }
         else{
-            cerr << "NOT found" << '\n';
             b_only_edges.insert(edge);
         }
     }
