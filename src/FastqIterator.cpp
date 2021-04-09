@@ -23,7 +23,11 @@ void FastqElement::get_error_probabilities(vector<float>& probabilities) {
 FastqIterator::FastqIterator(path file_path):
         file_path(file_path),
         file(file_path)
-{}
+{
+    if (not (file.is_open() and file.good())){
+        throw runtime_error("ERROR: fastq file cannot be opened: " + absolute(file_path).string());
+    }
+}
 
 
 size_t FastqIterator::get_line_number() const{
