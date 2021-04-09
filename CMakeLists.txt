@@ -127,6 +127,54 @@ message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
 ##############################################
 # ------------------------------------------ #
 # -------- LINKING EXTERNAL LIBRARY -------- #
+# ---------------- mummer4 ----------------- #
+# ------------------------------------------ #
+##############################################
+
+# Need to explicitly enable ExternalProject functionality
+include(ExternalProject)
+
+# Download or update library as an external project
+ExternalProject_Add(project_mummer
+        URL https://github.com/mummer4/mummer/releases/download/v4.0.0rc1/mummer-4.0.0rc1.tar.gz
+#        PREFIX ${CMAKE_SOURCE_DIR}/external/mummer
+#        DOWNLOAD_COMMAND ""
+#        UPDATE_COMMAND ""
+#        STAMP_DIR ${CMAKE_SOURCE_DIR}/external/mummer/stamp
+        BUILD_IN_SOURCE TRUE
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/mummer/
+        CONFIGURE_COMMAND ${CMAKE_SOURCE_DIR}/external/mummer/configure --prefix=${CMAKE_SOURCE_DIR}/external/mummer/
+        INSTALL_DIR ${CMAKE_SOURCE_DIR}/external/mummer/
+        BUILD_COMMAND make
+        INSTALL_COMMAND make install
+        )
+
+# Define INSTALL_DIR as the install directory for external library
+ExternalProject_Get_Property(project_mummer INSTALL_DIR)
+
+# Create new library for external project (so it can be linked with main library)
+add_library(mummer4 SHARED IMPORTED)
+set_property(TARGET mummer4
+        PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libumdmummer.so)
+
+# Define main library as dependent on the downloaded project (transitively)
+add_dependencies(mummer4
+        project_mummer)
+
+add_dependencies(overlap_analysis mummer4)
+
+# Ensure that main library has access to primary dependencies' and secondary dependencies' headers
+include_directories(external/mummer/include/)
+
+# Add runtime path for main library so it can access external library
+#set_property(TARGET GetBlunted PROPERTY INSTALL_RPATH "$ORIGIN" "${INSTALL_DIR}/bin/ogdf")
+
+message(STATUS "INSTALL_DIR: ${INSTALL_DIR}")
+
+
+##############################################
+# ------------------------------------------ #
+# -------- LINKING EXTERNAL LIBRARY -------- #
 # ------------------ ogdf ------------------ #
 # ------------------------------------------ #
 ##############################################
@@ -169,6 +217,7 @@ set(TESTS
         test_chaining
         test_ogdf
         test_gnuplot
+        test_mummer
         test_seqan
 #        test_wf
         )
@@ -183,6 +232,7 @@ foreach(FILENAME_PREFIX ${TESTS})
             ogdf
             coin
             seqan3::seqan3
+            mummer4
             )
 
 endforeach()
@@ -191,6 +241,7 @@ endforeach()
 # -------- EXECUTABLES --------
 
 set(EXECUTABLES
+        dotplot
         evaluate_overlaps
         filter_chimeras_from_paf
         filter_palindromes_by_quality
@@ -210,7 +261,9 @@ foreach(FILENAME_PREFIX ${EXECUTABLES})
             ogdf
             coin
             seqan3::seqan3
+            mummer4
             )
+
 endforeach()
 
 # -------- final steps --------
