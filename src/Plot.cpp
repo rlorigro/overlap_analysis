@@ -5,6 +5,9 @@
 #include "boost/lexical_cast.hpp"
 
 using boost::uuids::random_generator;
+
+#include <string>
+
 using std::to_string;
 
 
@@ -46,31 +49,6 @@ void Plot::set_yrange(size_t y_min, size_t y_max){
     check_file();
 
     file << "set yrange [" << y_min << ',' << y_max << "]\n";
-}
-
-
-void Plot::add_lines(const vector<size_t>& x, const vector<size_t>& y, string line_color, string title) {
-    check_file();
-
-    if (x.size() != y.size()){
-        throw runtime_error("ERROR: can't plot unequal size x and y vectors: " + to_string(x.size()) + " " + to_string(y.size()));
-    }
-
-    file << "plot '-' with lines ";
-
-    if (not title.empty()) {
-        file << "title " << title << '\n';
-    }
-    else{
-        file << "notitle" << '\n';
-    }
-
-    for (size_t i=0; i<x.size(); i++){
-        file << '\t' << x[i] << "," << y[i] << '\n';
-    }
-
-    // Denote end of data
-    file << "\te\n";
 }
 
 
