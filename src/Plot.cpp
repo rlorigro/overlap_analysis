@@ -18,7 +18,10 @@ void Plot::check_file(){
 }
 
 
-Plot::Plot(path output_path, size_t width, size_t height){
+Plot::Plot(path output_path, size_t width, size_t height, size_t axis_font_size, size_t border_line_width):
+    width(width),
+    height(height)
+{
     // Maybe there is a collision with another thread, so allow several retries on generating uuid
     int8_t retries = 5;
     while (--retries >= 0){
@@ -33,8 +36,10 @@ Plot::Plot(path output_path, size_t width, size_t height){
 
     file << "set terminal svg size " << width << "," << height << " font 'Noto Serif'\n"
          << "set output " << absolute(output_path) << "\n"
+         << "set border linewidth " << border_line_width << "\n"
          << "set xtics out nomirror\n"
-         << "set ytics out nomirror\n";
+         << "set ytics out nomirror\n"
+         << "set tics font ', "<< axis_font_size << "'\n";
 }
 
 

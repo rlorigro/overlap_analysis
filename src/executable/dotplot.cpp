@@ -62,7 +62,7 @@ void reverse_complement(string& sequence, string& rc_sequence){
 
 
 void dotplot(path fastq_path, path output_directory){
-    uint32_t min_length = 10;
+    uint32_t min_length = 12;
 
     if (exists(output_directory)){
         throw runtime_error("ERROR: output directory already exists");
@@ -78,9 +78,9 @@ void dotplot(path fastq_path, path output_directory){
 
     while (fastq_iterator.next_fastq_element(element)){
         path plot_path = output_directory / (element.name + "_dotplot.svg");
-        Plot plot(plot_path, 1200, 1200);
+        Plot plot(plot_path, 800, 800, 18, 2);
 
-        vector <array <int64_t,4> > coords;
+        vector <array <int64_t,2> > coords;
 
         reverse_complement(element.sequence, rc_sequence);
 
@@ -91,19 +91,20 @@ void dotplot(path fastq_path, path output_directory){
 
         auto matcher = mummer::mummer::sparseSA::create_auto(element.sequence.c_str(), element.sequence.size(), 0, true);
 
-        vector<mummer::mummer::match_t> mems;
+        vector<mummer::mummer::match_t> mams;
 
         // min_len must be > 1
-        matcher.findMEM_each(rc_sequence, min_length, false, [&](const mummer::mummer::match_t& match){
-//            cerr << match.ref << ' ' << match.len << ' ' << element.sequence.substr(match.ref, match.len) << '\n';
+        matcher.findMAM_each(rc_sequence, min_length, false, [&](const mummer::mummer::match_t& match){
+            mams.emplace_back(match);
 
-            array <int64_t, 4> coord = {match.ref, match.query, match.ref+match.len, match.query+match.len};
+            for (int64_t i=0; i<match.len; i+=50){
+                array <int64_t,2> coord = {match.ref + i, match.query + i};
 
-            mems.emplace_back(match);
-            coords.emplace_back(coord);
+                coords.emplace_back(coord);
+            }
         });
 
-        plot.add_disjoint_lines(coords);
+        plot.add_points(coords, "", 0.1, "");
         plot.generate();
     }
 }
