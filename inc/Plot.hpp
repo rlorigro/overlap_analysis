@@ -90,6 +90,7 @@ template <class T> void Plot::add_disjoint_lines(const vector <array <T, 4> >& c
     file << "\te\n";
 }
 
+
 template <class T, class T2> void Plot::add_points(const vector <array <T, 2> >& coordinates, string line_color, T2 point_size, string title) {
     check_file();
 

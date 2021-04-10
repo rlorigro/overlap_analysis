@@ -1,6 +1,6 @@
 #include "FastqIterator.hpp"
+#include "dotplot.hpp"
 #include "Plot.hpp"
-#include "mummer/sparseSA.hpp"
 
 using overlap_analysis::FastqElement;
 using overlap_analysis::FastqIterator;
@@ -77,35 +77,9 @@ void dotplot(path fastq_path, path output_directory){
     FastqIterator fastq_iterator(fastq_path);
 
     while (fastq_iterator.next_fastq_element(element)){
-        path plot_path = output_directory / (element.name + "_dotplot.svg");
-        Plot plot(plot_path, 800, 800, 18, 2);
-
-        vector <array <int64_t,2> > coords;
-
         reverse_complement(element.sequence, rc_sequence);
 
-        if (element.sequence.size() < 400) {
-            cerr << element.sequence << '\n';
-            cerr << rc_sequence << '\n';
-        }
-
-        auto matcher = mummer::mummer::sparseSA::create_auto(element.sequence.c_str(), element.sequence.size(), 0, true);
-
-        vector<mummer::mummer::match_t> mams;
-
-        // min_len must be > 1
-        matcher.findMAM_each(rc_sequence, min_length, false, [&](const mummer::mummer::match_t& match){
-            mams.emplace_back(match);
-
-            for (int64_t i=0; i<match.len; i+=50){
-                array <int64_t,2> coord = {match.ref + i, match.query + i};
-
-                coords.emplace_back(coord);
-            }
-        });
-
-        plot.add_points(coords, "", 0.1, "");
-        plot.generate();
+        generate_dotplot(element.name, element.sequence, rc_sequence, min_length, output_directory);
     }
 }
 

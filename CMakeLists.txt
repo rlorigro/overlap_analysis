@@ -50,6 +50,7 @@ include_directories(
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
         src/AlignmentChain.cpp
+        src/dotplot.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
         src/FastqIterator.cpp
