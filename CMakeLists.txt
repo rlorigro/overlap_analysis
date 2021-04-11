@@ -201,7 +201,6 @@ set(TESTS
         test_ogdf
         test_gnuplot
         test_mummer
-        test_seqan
         test_svgplot
         test_wf
         )
