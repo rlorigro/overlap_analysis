@@ -26,10 +26,15 @@ class Plot{
 public:
     path file_path;
     path directory = "/dev/shm/";
+    path image_output_path;
     const string filename_suffix = ".gp";
     ofstream file;
     size_t width;
     size_t height;
+
+    bool writing_points;
+    bool writing_disjoint_lines;
+    bool writing_lines;
 
     Plot(path output_path, size_t width, size_t height, size_t axis_font_size=12, size_t border_line_width=1);
     void check_file();
@@ -38,10 +43,51 @@ public:
     void set_yrange(size_t y_min, size_t y_max);
 
     void generate();
-    template <class T> void add_lines(const vector<T>& x, const vector<T>& y, string line_color="blue", string title="");
-    template <class T, class T2> void add_points(const vector <array <T, 2> >& coordinates, string line_color, T2 point_size, string title);
-    template <class T> void add_disjoint_lines(const vector <array <T, 4> >& coordinates, string line_color="blue", T line_width=1, string title="");
+
+    template <class T> void add_lines(
+            const vector<T>& x,
+            const vector<T>& y,
+            string line_color="dark-violet",
+            string title="");
+
+    template <class T, class T2, class T3> void add_points(
+            const vector <array <T, 2> >& coordinates,
+            uint16_t type=7,
+            T3 color="dark-violet",
+            T2 point_size=1,
+            string title="");
+
+    template <class T> void add_disjoint_lines(
+            const vector <array <T, 4> >& coordinates,
+            string line_color="dark-violet",
+            T line_width=1,
+            string title="");
+
+    template <class T, class T2, class T3> void add_point(
+            T x,
+            T y,
+            uint16_t type=7,
+            T3 color="dark-violet",
+            T2 point_size=1,
+            string title="");
 };
+
+
+class PointSeries{
+    /// Attributes ///
+    size_t index;
+    uint16_t type=7;
+    string color="dark-violet";
+    int16_t point_size=1;
+    string title;
+
+    /// Methods ///
+    PointSeries(size_t index, uint16_t type=7, string color="dark-violet", int16_t point_size=1, string title="");
+
+    bool is_open();
+    void write_plot_command(ofstream& o);
+};
+
 
 
 template <class T> void Plot::add_lines(const vector<T>& x, const vector<T>& y, string line_color, string title) {
@@ -91,10 +137,10 @@ template <class T> void Plot::add_disjoint_lines(const vector <array <T, 4> >& c
 }
 
 
-template <class T, class T2> void Plot::add_points(const vector <array <T, 2> >& coordinates, string line_color, T2 point_size, string title) {
+template <class T, class T2, class T3> void Plot::add_points(const vector <array <T, 2> >& coordinates, uint16_t type, T3 color, T2 point_size, string title) {
     check_file();
 
-    file << "plot '-' w points pointsize " << point_size << " pointtype 7 ";
+    file << "plot '-' w points pointsize " << point_size << " pointtype " << type << " lc rgb '" << color << "' ";
 
     if (not title.empty()) {
         file << "title " << title << '\n';
@@ -110,6 +156,31 @@ template <class T, class T2> void Plot::add_points(const vector <array <T, 2> >&
 
     // Denote end of data
     file << "\te\n";
+}
+
+
+template <class T, class T2, class T3> void Plot::add_point(T x, T y, uint16_t type, T3 color, T2 point_size, string title) {
+    check_file();
+
+    if (not writing_points) {
+        if (writing_lines or writing_disjoint_lines) {
+            // Terminate whichever previous data series was being written to the file
+            file << "\te\n";
+        }
+
+        file << "plot '-' w points pointsize " << point_size << " pointtype " << type << " lc rgb " << color << " ";
+
+        if (not title.empty()) {
+            file << "title " << title << '\n';
+        }
+        else {
+            file << "notitle" << '\n';
+        }
+
+        writing_points = true;
+    }
+
+    file << '\t' << x << ' ' << y << '\n';
 }
 
 

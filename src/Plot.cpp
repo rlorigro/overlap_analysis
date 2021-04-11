@@ -20,8 +20,16 @@ void Plot::check_file(){
 
 Plot::Plot(path output_path, size_t width, size_t height, size_t axis_font_size, size_t border_line_width):
     width(width),
-    height(height)
+    height(height),
+    image_output_path(output_path),
+    writing_points(false),
+    writing_disjoint_lines(false),
+    writing_lines(false)
 {
+    if (not exists(directory)){
+        create_directories(absolute(directory));
+    }
+
     // Maybe there is a collision with another thread, so allow several retries on generating uuid
     int8_t retries = 5;
     while (--retries >= 0){
@@ -58,9 +66,16 @@ void Plot::set_yrange(size_t y_min, size_t y_max){
 
 
 void Plot::generate(){
+    if (writing_points or writing_disjoint_lines or writing_lines){
+        // Terminate whichever previous data series was being written to the file
+        file << "\te\n";
+    }
+
     check_file();
 
     file.close();
+
+    cerr << "Writing plot to: " << image_output_path << '\n';
 
     const string command = "gnuplot " + file_path.string();
 

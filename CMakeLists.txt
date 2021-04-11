@@ -50,6 +50,7 @@ include_directories(
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
         src/AlignmentChain.cpp
+        src/Color.cpp
         src/dotplot.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
@@ -59,8 +60,9 @@ set(SOURCES
         src/OverlapMap.cpp
         src/PafElement.cpp
         src/Plot.cpp
+        src/SvgPlot.cpp
         src/SequenceElement.cpp
-#        src/wavefront.cpp
+        src/wavefront.cpp
         )
 
 project(overlap_analysis)
@@ -220,7 +222,8 @@ set(TESTS
         test_gnuplot
         test_mummer
         test_seqan
-#        test_wf
+        test_svgplot
+        test_wf
         )
 
 foreach(FILENAME_PREFIX ${TESTS})
@@ -249,7 +252,7 @@ set(EXECUTABLES
         find_overlapping_alignments
         label_alignment_info
         plot_alignment_as_double_stranded_graph
-#        self_align
+        self_align
         )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})
