@@ -47,7 +47,8 @@ void evaluate_overlaps(
         path output_directory,
         uint32_t min_quality,
         path excluded_reads_path,
-        uint16_t label_type){
+        uint16_t label_type,
+        bool plot){
 
     if (exists(output_directory)){
         throw runtime_error("ERROR: output directory already exists");
@@ -62,11 +63,16 @@ void evaluate_overlaps(
     construct_graph(path_a, graph_a, min_quality);
     construct_graph(path_b, graph_b, min_quality);
 
-    render_graph(graph_a, label_type, output_directory, "a");
-    render_graph(graph_b, label_type, output_directory, "b");
+    if (plot) {
+        render_graph(graph_a, label_type, output_directory, "a");
+        render_graph(graph_b, label_type, output_directory, "b");
+    }
 
-    GraphDiff diff(graph_a, graph_b);
-    cerr << diff << '\n';
+    cerr << "Evaluating edge differences..." << '\n';
+    GraphDiff diff(graph_a, graph_b, output_directory);
+
+    ofstream out_file(output_directory / "diff.txt");
+    out_file << diff;
 }
 
 
@@ -80,6 +86,7 @@ int main(int argc, char* argv[]){
     string subgraph_argument;
     string subgraph_node_name;
     uint32_t subgraph_radius;
+    bool plot;
 
     options_description options("Arguments:");
 
@@ -100,7 +107,7 @@ int main(int argc, char* argv[]){
 
             ("output_dir",
              value<path>(&output_directory)
-                     ->required(),
+             ->required(),
              "Where to dump output SVG, CSV, PAF, etc")
 
             ("mapq",
@@ -111,18 +118,23 @@ int main(int argc, char* argv[]){
 
             ("exclude",
              value<path>(&excluded_reads_path)
-                     ->default_value(""),
+             ->default_value(""),
              "File path of PAF file containing alignments to some reference")
 
             ("label,l",
              value<uint16_t>(&label_type)
-                     ->default_value(0),
+             ->default_value(0),
              "Labelling scheme for nodes:\n"
              "\t0 - None\n"
              "\t1 - Original names\n"
              "\t2 - Numeric")
-            ;
 
+            ("plot",
+             bool_switch(&plot)->
+             default_value(false),
+             "Whether to render the graph as SVG or not. Strongly discouraged for\n"
+             "graphs with more than a few thousand nodes")
+            ;
 
     variables_map vm;
     store(parse_command_line(argc, argv, options), vm);
@@ -140,7 +152,8 @@ int main(int argc, char* argv[]){
             output_directory,
             min_quality,
             excluded_reads_path,
-            label_type);
+            label_type,
+            plot);
 
     return 0;
 }

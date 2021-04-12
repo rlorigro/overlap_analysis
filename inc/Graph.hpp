@@ -134,15 +134,15 @@ public:
 class GraphDiff{
 public:
     /// Attributes ///
-    const UndirectedGraph& graph_a;
-    const UndirectedGraph& graph_b;
+    const DoubleStrandedGraph& graph_a;
+    const DoubleStrandedGraph& graph_b;
     set <edge> a_only_edges;
     set <edge> b_only_edges;
     set <edge> a_both_edges;
     set <edge> b_both_edges;
 
     /// Methods ///
-    GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b);
+    GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
 };
 
 

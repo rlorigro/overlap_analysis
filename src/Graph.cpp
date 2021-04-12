@@ -643,8 +643,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                 name_b = token;
             }
             else if (n_delimiters == 2){
-                // Depending on the format there may be more data after this token
-                is_cross_strand = (token == "Yes");
+                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes/No)
+                is_cross_strand = (token == "No");
             }
 
             token.resize(0);
@@ -663,8 +663,6 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
             auto id_a = graph.add_node(name_a);
             auto id_b = graph.add_node(name_b);
 
-            cerr << name_a << ' ' << name_b << ' ' << is_cross_strand << '\n';
-
             if (not is_cross_strand) {
                 graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
                 graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
@@ -673,7 +671,6 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                 graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
                 graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
             }
-
 
             token.resize(0);
             n_delimiters = 0;
@@ -688,11 +685,13 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
 /// Dumb brute force search to compare edges in 2 graphs
 /// A better method might be a joint BFS
-GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b):
+GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory):
         graph_a(a),
         graph_b(b)
 {
-    cerr << '\n';
+    ofstream file_a(output_directory / "a_only_edges.csv");
+    ofstream file_b(output_directory / "b_only_edges.csv");
+
     for (auto edge: a.graph.edges){
         auto nodes = edge->nodes();
 
@@ -709,11 +708,11 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b)
             a_both_edges.insert(edge);
         }
         else{
+            file_a << name0 << ',' << name1 << ',' << (reversal0 == reversal1) <<'\n';
             a_only_edges.insert(edge);
         }
     }
 
-    cerr << '\n';
     for (auto edge: b.graph.edges){
         auto nodes = edge->nodes();
 
@@ -730,6 +729,7 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b)
             b_both_edges.insert(edge);
         }
         else{
+            file_b << name0 << ',' << name1 << ',' << (reversal0 == reversal1) <<'\n';
             b_only_edges.insert(edge);
         }
     }
@@ -737,10 +737,9 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b)
 
 
 ostream& operator<<(ostream& o, GraphDiff& g){
-    o << g.a_only_edges.size() << '\n';
-    o << g.b_only_edges.size() << '\n';
-    o << g.b_both_edges.size() << '\n';
-    o << g.a_both_edges.size() << '\n';
+    o << "a_edges," << g.a_only_edges.size() << '\n';
+    o << "b_edges," << g.b_only_edges.size() << '\n';
+    o << "a_and_b_edges," << g.b_both_edges.size() << '\n';
 
     return o;
 }
