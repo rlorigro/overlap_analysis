@@ -24,6 +24,7 @@ using std::array;
 
 class SvgPlot{
 public:
+    /// Attributes ///
     path file_path;
     path image_output_path;
     ofstream file;
@@ -36,7 +37,20 @@ public:
     size_t y_min;
     size_t y_max;
 
-    SvgPlot(path output_path, size_t width, size_t height, size_t x_min, size_t x_max, size_t y_min, size_t y_max);
+    bool axes;
+    double padding;
+
+    /// Methods ///
+    SvgPlot(
+            path output_path,
+            size_t width,
+            size_t height,
+            size_t x_min,
+            size_t x_max,
+            size_t y_min,
+            size_t y_max,
+            bool axes=false);
+
     ~SvgPlot();
 
     void check_file();
@@ -140,7 +154,7 @@ template <class T, class T2, class T3> void SvgPlot::add_disjoint_lines(
 
     for (const auto& c: coordinates){
         file << '\t' << "<line x1='" << c[0] << "' y1='" << c[1] << "' x2='" << c[2] << "' y2='" << c[3]
-             << "' stroke='" << color << "' strok-width='" << width << "' />\n";
+             << "' stroke='" << color << "' stroke-width='" << width << "' />\n";
     }
 }
 
