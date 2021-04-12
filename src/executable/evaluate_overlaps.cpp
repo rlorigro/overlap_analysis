@@ -24,6 +24,40 @@ using std::cerr;
 using std::cout;
 
 
+void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excluded_reads) {
+    ifstream file(excluded_reads_path);
+    if (not file.good()){
+        throw runtime_error("ERROR: excluded reads file could not be read: " + excluded_reads_path.string());
+    }
+
+    string line;
+
+    while (getline(file, line)){
+        excluded_reads.emplace(line.substr(0, line.size()));
+    }
+}
+
+
+void exclude_reads_from_graph(
+        DoubleStrandedGraph& graph,
+        path excluded_reads_path,
+        path output_path
+){
+    ofstream file(output_path);
+    if (not file.good()){
+        throw runtime_error("ERROR: could not write to output: " + output_path.string());
+    }
+
+    set<string> excluded_reads;
+    load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
+
+    for (const string& name: excluded_reads){
+        graph.remove_node(name);
+        file << name << '\n';
+    }
+}
+
+
 void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_quality){
     RegionalOverlapMap _;
 
@@ -62,6 +96,11 @@ void evaluate_overlaps(
 
     construct_graph(path_a, graph_a, min_quality);
     construct_graph(path_b, graph_b, min_quality);
+
+    if (not excluded_reads_path.empty()){
+        exclude_reads_from_graph(graph_a, excluded_reads_path, output_directory/"a_excluded_reads.txt");
+        exclude_reads_from_graph(graph_b, excluded_reads_path, output_directory/"b_excluded_reads.txt");
+    }
 
     if (plot) {
         render_graph(graph_a, label_type, output_directory, "a");
