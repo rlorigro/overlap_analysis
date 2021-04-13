@@ -171,8 +171,8 @@ int main(int argc, char* argv[]){
             ("plot",
              bool_switch(&plot)->
              default_value(false),
-             "Whether to render the graph as SVG or not. Strongly discouraged for\n"
-             "graphs with more than a few thousand nodes")
+             "Whether to render the graph as SVG or not. \n"
+             "Strongly discouraged for graphs with more than a few thousand nodes")
             ;
 
     variables_map vm;
