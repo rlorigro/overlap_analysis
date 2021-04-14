@@ -643,7 +643,7 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                 name_b = token;
             }
             else if (n_delimiters == 2){
-                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes/No)
+                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
                 is_cross_strand = (token == "No");
             }
 
@@ -651,25 +651,29 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
             n_delimiters++;
         }
         else if (c == '\n'){
-            if (n_delimiters < 2){
-                throw runtime_error(
-                        "ERROR: file provided does not contain sufficient delimiters to be adjacency csv at line: " +
-                        to_string(n_lines));
-            }
-            if (n_delimiters == 2){
-                is_cross_strand = (token == "Yes");
-            }
+            // Skip header line
+            if (n_lines != 0){
+                if (n_delimiters < 2){
+                    throw runtime_error(
+                            "ERROR: file provided does not contain sufficient delimiters to be adjacency csv at line: " +
+                            to_string(n_lines));
+                }
+                if (n_delimiters == 2){
+                    // shasta uses 'isSameStrand'=Yes|No
+                    is_cross_strand = (token == "No");
+                }
 
-            auto id_a = graph.add_node(name_a);
-            auto id_b = graph.add_node(name_b);
+                auto id_a = graph.add_node(name_a);
+                auto id_b = graph.add_node(name_b);
 
-            if (not is_cross_strand) {
-                graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
-                graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
-            }
-            else{
-                graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
-                graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
+                if (not is_cross_strand) {
+                    graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
+                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
+                }
+                else{
+                    graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
+                    graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
+                }
             }
 
             token.resize(0);
