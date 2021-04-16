@@ -23,6 +23,10 @@ SvgPlot::SvgPlot(
         y_max(y_max),
         axes(axes)
 {
+    if (not file.is_open() and file.good()){
+        throw runtime_error("ERROR: could not write to file: " + image_output_path.string());
+    }
+
     if (axes){
         padding = (double((x_max-x_min)+(y_max-y_min))/2)*0.1;
         width *= 1.1;
@@ -77,8 +81,6 @@ SvgPlot::SvgPlot(
         file << "</g>" << '\n';
 
     }
-
-
 }
 
 

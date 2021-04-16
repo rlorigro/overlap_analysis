@@ -20,30 +20,23 @@ using boost::program_options::variables_map;
 using boost::program_options::bool_switch;
 using boost::program_options::value;
 
-#include "mummer/sparseSA.hpp"
-
-using mummer::mummer::match_t;
+#include "edlib.h"
 
 
 size_t compute_all_vs_all(vector <FastqElement>& sequences, uint32_t min_length){
     size_t n_comparisons = 0;
 
     for (const auto& s: sequences) {
-        auto matcher = mummer::mummer::sparseSA::create_auto(s.sequence.c_str(), s.sequence.size(), 0, true);
-
-        vector<match_t> matches;
-
         for (const auto& s2: sequences) {
             if (s.name == s2.name) {
                 continue;
             }
 
-            matcher.findMUM_each(s2.sequence, min_length, false, [&](const match_t& match) {
-                matches.emplace_back(match);
-            });
-
-            cerr << matches.size() << '\n';
-
+            EdlibAlignResult result = edlibAlign(s.sequence.c_str(), s.sequence.size(), s2.sequence.c_str(), s2.sequence.size(), edlibDefaultAlignConfig());
+            if (result.status == EDLIB_STATUS_OK) {
+                cerr << result.editDistance << '\n';
+            }
+            edlibFreeAlignResult(result);
             n_comparisons++;
         }
     }
@@ -57,7 +50,7 @@ void test(path fastq_path){
     uint32_t min_length = 12;
 
     // How many times to loop over entire dataset
-    size_t n_trials = 10;
+    size_t n_trials = 1;
 
     // Pre-load all the sequences into memory using a vector
     vector <FastqElement> sequences;
@@ -93,6 +86,7 @@ void test(path fastq_path){
     auto elapsed2 = std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3);
     cerr << "Completed in: " << elapsed2.count() << " milliseconds" << '\n';
     cerr << "Total comparisons: " << total_comparisons << '\n';
+    cerr << "Average time to compare: " << double(elapsed2.count())/total_comparisons << '\n';
 }
 
 

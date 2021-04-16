@@ -68,7 +68,8 @@ void self_align(path fastq_path){
     double error_rate = 0.15;
 
     double a = 2 * error_rate * mismatch_penalty;
-    int32_t prune = -2 * log(1e-6) / log(4);
+//    int32_t prune = -2 * log(1e-9) / log(4);
+    int32_t prune = 800;
 
     FastqElement element;
     string rc_sequence;
@@ -80,7 +81,10 @@ void self_align(path fastq_path){
 
         int32_t b = 1 * sqrt(element.sequence.size() + element.sequence.size()) * mismatch_penalty;
 
-        cerr << "self-aligning sequence " << element.name << " of length " << element.sequence.size() << " with params: \n"
+        a = 0;
+        b = 99999999;
+
+        cerr << "Self-aligning sequence " << element.name << " of length " << element.sequence.size() << " with params: \n"
              << '\t' << "a=" << a << '\n'
              << '\t' << "b=" << b << '\n'
              << '\t' << "prune=" << prune << '\n';
@@ -95,12 +99,10 @@ void self_align(path fastq_path){
         auto cigars = wavefront_align(element.sequence, rc_sequence, scores, a, b, prune, visualization_path);
 
         if (cigars.empty()){
-            cerr << "alignment aborted" << '\n';
+            cerr << "Alignment aborted" << '\n';
         }
         else {
-            for (const auto& item: cigars) {
-                cerr << item.len << item.op << ' ';
-            }
+            cerr << "Score: " << score_cigar(element.sequence, rc_sequence, cigars, scores);
         }
         cerr << '\n';
     }

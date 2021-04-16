@@ -23,7 +23,6 @@ using std::cerr;
 using std::cout;
 
 #include "boost/program_options.hpp"
-#include "boost/bimap.hpp"
 
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
