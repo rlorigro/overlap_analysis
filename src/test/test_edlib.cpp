@@ -22,41 +22,77 @@ using boost::program_options::bool_switch;
 using boost::program_options::value;
 
 #include "edlib.h"
+#include "mummer/sparseSA.hpp"
 
 
-void plot_edlib_alignment(SvgPlot& plot, const EdlibAlignResult& result, const string& ref, const string& query){
-    vector<size_t> ref_move = {1,0,1,1};
-    vector<size_t> query_move = {1,1,0,1};
+void plot_edlib_alignment(const string& ref, const string& query, SvgPlot& plot){
+    auto config = edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_PATH, nullptr, 0);
+
+    EdlibAlignResult result = edlibAlign(ref.c_str(), ref.size(), query.c_str(), query.size(), config);
+    if (result.status != EDLIB_STATUS_OK) {
+        throw runtime_error("ERROR: edlib alignment failed");
+    }
+
+    vector<size_t> ref_move = {1,1,0,1};
+    vector<size_t> query_move = {1,0,1,1};
 
     size_t prev_ref_index = 0;
     size_t prev_query_index = 0;
     size_t ref_index = ref_move[result.alignment[0]];
     size_t query_index = query_move[result.alignment[0]];
 
-    for (size_t i=1; i<result.alignmentLength; i++){
-        if (result.alignment[i-1] != result.alignment[i]){
-            plot.add_line(prev_ref_index, prev_query_index, ref_index, query_index, 1, "blue");
-
-            prev_query_index = query_index;
-            prev_ref_index = ref_index;
-
-        }
-
-        query_index += query_move[result.alignment[i-1]];
-        ref_index += ref_move[result.alignment[i-1]];
-
-        if (i < 400){
-            cerr << ref[ref_index] << ' ' << query[query_index] << '\n';
-        }
+    for (size_t i=0; i<200 and i<result.alignmentLength; i++) {
+        cerr << int(result.alignment[i]);
     }
     cerr << '\n';
 
+    cerr << ref.substr(0,200) << '\n';
+    cerr << query.substr(0,200) << '\n';
+
+    for (size_t i=1; i<result.alignmentLength; i++){
+        if (i > 0){
+            if (result.alignment[i-1] != result.alignment[i]) {
+                plot.add_line(prev_ref_index, prev_query_index, ref_index, query_index, ref.size()/2000, "orange");
+
+                prev_query_index = query_index;
+                prev_ref_index = ref_index;
+            }
+        }
+
+        query_index += query_move[result.alignment[i]];
+        ref_index += ref_move[result.alignment[i]];
+    }
+
+    plot.add_line(prev_ref_index, prev_query_index, ref_index, query_index, ref.size()/2000, "orange");
+
+    edlibFreeAlignResult(result);
 }
 
 
-size_t compute_all_vs_all(vector <FastqElement>& sequences){
-    auto config = edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_PATH, nullptr, 0);
+void plot_mummer_matches(const string& ref, const string& query, SvgPlot& plot){
+    auto matcher = mummer::mummer::sparseSA::create_auto(ref.c_str(), ref.size(), 0, true);
 
+    vector<mummer::mummer::match_t> mams;
+
+    string type = "rect";
+    string color = "#8115A3";
+
+    matcher.findMAM_each(query, 12, false, [&](const mummer::mummer::match_t& match){
+        mams.emplace_back(match);
+
+        for (size_t i=0; i<match.len; i+=50) {
+            plot.add_point(
+                    match.ref + i,
+                    match.query + i,
+                    type,
+                    ref.size()/2000,
+                    color);
+        }
+    });
+
+}
+
+size_t compute_all_vs_all(vector <FastqElement>& sequences){
     size_t n_comparisons = 0;
 
     path output_directory = "plots/";
@@ -71,20 +107,15 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
                 continue;
             }
 
-            const string& a = s.sequence;
-            const string& b = s2.sequence;
+            const string& ref = s.sequence;
+            const string& query = s2.sequence;
 
-            EdlibAlignResult result = edlibAlign(a.c_str(), a.size(), b.c_str(), b.size(), config);
-            if (result.status == EDLIB_STATUS_OK) {
-                cerr << result.alignmentLength << '\n';
+            path plot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
+            SvgPlot plot(plot_path, 800, 800, 0, ref.size(), 0, query.size(), true);
 
-                path plot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
-                SvgPlot plot(plot_path, 800, 800, 0, s.sequence.size(), 0, s2.sequence.size(), true);
+            plot_mummer_matches(ref, query, plot);
+            plot_edlib_alignment(ref, query, plot);
 
-                plot_edlib_alignment(plot, result, s.sequence, s2.sequence);
-            }
-
-            edlibFreeAlignResult(result);
             n_comparisons++;
         }
     }

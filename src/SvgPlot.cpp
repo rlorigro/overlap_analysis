@@ -43,10 +43,10 @@ SvgPlot::SvgPlot(
     file << "<g transform='translate(" << padding << ',' << padding << ")' >" << '\n';
 
     if (axes) {
-        add_line(x_min, y_min, x_min, y_max, padding/20, "black");
-        add_line(x_min, y_min, x_max, y_min, padding/20, "black");
-        add_line(x_max, y_min, x_max, y_max, padding/20, "black");
-        add_line(x_min, y_max, x_max, y_max, padding/20, "black");
+        add_line(x_min, y_min, x_min, y_max, padding/200, "black");
+        add_line(x_min, y_min, x_max, y_min, padding/200, "black");
+        add_line(x_max, y_min, x_max, y_max, padding/200, "black");
+        add_line(x_min, y_max, x_max, y_max, padding/200, "black");
 
         double tick_scale = round(2*(double(x_max - x_min)/10))/2;
 
@@ -59,7 +59,7 @@ SvgPlot::SvgPlot(
                     double(y_max),
                     double(i*tick_scale),
                     double(y_max+padding/5),
-                    padding/20,
+                    padding/200,
                     "black");
         }
 
@@ -74,7 +74,7 @@ SvgPlot::SvgPlot(
                     double(i*tick_scale),
                     double(x_min+padding/5),
                     double(i*tick_scale),
-                    padding/20,
+                    padding/200,
                     "black");
         }
 
