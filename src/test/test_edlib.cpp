@@ -125,9 +125,6 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
 
 
 void test(path fastq_path){
-    // How many times to loop over entire dataset
-    size_t n_trials = 1;
-
     // Pre-load all the sequences into memory using a vector
     vector <FastqElement> sequences;
     FastqElement element;
@@ -136,33 +133,12 @@ void test(path fastq_path){
 
     cerr << "Loading sequences..." << '\n';
 
-    auto t1 = std::chrono::high_resolution_clock::now();
-
     while (fastq_iterator.next_fastq_element(element)){
         sequences.emplace_back(element);
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }
 
-    auto t2 = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-
-    cerr << "Completed in: " << elapsed.count() << " milliseconds" << '\n';
-    cerr << '\n';
-
-    cerr << "Computing exact matches for " << sequences.size() << " sequences (all vs all) with " << n_trials << " repeat trials..\n";
-
-    auto t3 = std::chrono::high_resolution_clock::now();
-
-    size_t total_comparisons = 0;
-    for (size_t i=0; i<n_trials; i++) {
-        total_comparisons += compute_all_vs_all(sequences);
-    }
-
-    auto t4 = std::chrono::high_resolution_clock::now();
-    auto elapsed2 = std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3);
-    cerr << "Completed in: " << elapsed2.count() << " milliseconds" << '\n';
-    cerr << "Total comparisons: " << total_comparisons << '\n';
-    cerr << "Average time to compare: " << double(elapsed2.count())/total_comparisons << '\n';
+    compute_all_vs_all(sequences);
 }
 
 
