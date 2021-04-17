@@ -273,6 +273,7 @@ endforeach()
 # -------- EXECUTABLES --------
 
 set(EXECUTABLES
+        chain_alignment
         dotplot
         evaluate_overlaps
         filter_chimeras_from_paf
