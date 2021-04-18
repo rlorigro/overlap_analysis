@@ -57,6 +57,7 @@ set(SOURCES
         src/FastqIterator.cpp
         src/Graph.cpp
         src/graph_utils.cpp
+        src/Kernel.cpp
         src/OverlapMap.cpp
         src/PafElement.cpp
         src/Plot.cpp
@@ -243,10 +244,12 @@ include_directories( ${Boost_INCLUDE_DIR} )
 
 set(TESTS
         test_boost_interval_map
+        test_boost_rtree
         test_chaining
         test_edlib
         test_ogdf
         test_gnuplot
+        test_kernel
         test_mummer
         test_mummer_runtime
         test_edlib_runtime

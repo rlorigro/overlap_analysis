@@ -1,5 +1,6 @@
 #include "FastqIterator.hpp"
 #include "SvgPlot.hpp"
+#include "Kernel.hpp"
 
 using overlap_analysis::FastqElement;
 using overlap_analysis::FastqIterator;
@@ -37,7 +38,7 @@ void plot_mummer_matches(const vector<match_t>& matches, SvgPlot& plot, size_t l
     string color = "#8115A3";
 
     for (const auto& m: matches){
-        for (size_t i=0; i<m.len; i+=50) {
+        for (size_t i=0; i<size_t(m.len); i+=50) {
             plot.add_point(
                     m.ref + i,
                     m.query + i,
@@ -51,12 +52,19 @@ void plot_mummer_matches(const vector<match_t>& matches, SvgPlot& plot, size_t l
 
 template <class T> void plot_diagonal_scores(vector<T>& diagonal_scores, SvgPlot& plot){
     for (T x=0; x<diagonal_scores.size(); x++){
-//        if (diagonal_scores[x] > 0) {
-//            cerr << "drawing " << x << ' ' << 0 << ' ' << x << ' ' << diagonal_scores[x] << '\n';
-//        }
         plot.add_line(x,T(0),x,diagonal_scores[x],1,"blue");
     }
 }
+
+
+//template <class T> void find_most_massive_cluster(vector<T>& x, max_distance){
+//
+//}
+//
+//
+//void find_band(){
+//
+//}
 
 
 size_t get_diagonal(size_t y_size, size_t x, size_t y){
@@ -73,6 +81,8 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
         create_directories(absolute(output_directory));
     }
 
+    GaussianSmoother smoother(5,2);
+
     for (const auto& s: sequences) {
         for (const auto& s2: sequences) {
             if (s.name == s2.name) {
@@ -82,11 +92,6 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
             const string& ref = s.sequence;
             const string& query = s2.sequence;
 
-//            const string& ref =    "elephantsfall";
-//            const string& query = "telephonecall";
-
-            cerr << ref.size() << ' ' << query.size() << '\n';
-
             // Set up plot
             path dotplot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
             SvgPlot dotplot(dotplot_path, 800, 800, 0, ref.size(), 0, query.size(), true);
@@ -94,27 +99,32 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
             // Construct suffix array
             auto matcher = sparseSA::create_auto(ref.c_str(), ref.size(), 0, true);
             vector<match_t> matches;
-            vector<double> diagonal_scores(ref.size() + query.size() - 1, 0);
+            vector<size_t> diagonal_scores(ref.size() + query.size() - 1, 0);
+            vector<size_t> smooth_diagonal_scores(ref.size() + query.size() - 1, 0);
 
             // Search suffix array for exact matches
-            matcher.findMAM_each(query, 12, false, [&](const match_t& m){
+            matcher.findMAM_each(query, 10, false, [&](const match_t& m){
                 matches.emplace_back(m);
 
                 // Accumulate scores for each diagonal
                 auto d = get_diagonal(query.size(), m.ref, m.query);
-                cerr << m.ref << ' ' << m.query << ' ' << m.len << ' ' << d << ' ' << diagonal_scores.size() << '\n';
 
-                diagonal_scores[d] += 1 - pow(0.25, m.len);
+                diagonal_scores[d] += pow(m.len,2);
             });
+
+            cerr << s.name << ' ' << s2.name << ' ' << matches.size() << '\n';
 
             plot_mummer_matches(matches, dotplot, ref.size()/1000);
 
+            smoother.smooth(diagonal_scores, smooth_diagonal_scores);
+
+            auto max_score = *max_element(diagonal_scores.begin(), diagonal_scores.end());
+            cerr << max_score << '\n';
 
             path diagonal_plot_path = output_directory / (s.name + "_vs_" + s2.name + "_diagonals.svg");
-            auto max_score = *max_element(diagonal_scores.begin(), diagonal_scores.end());
             SvgPlot diagonal_plot(diagonal_plot_path, 800, 800, 0, ref.size() + query.size(), 0, max_score, true);
 
-            plot_diagonal_scores(diagonal_scores, diagonal_plot);
+            plot_diagonal_scores(smooth_diagonal_scores, diagonal_plot);
 
             n_comparisons++;
         }
