@@ -1,4 +1,4 @@
-#include "AlignmentChain.hpp"
+#include "PafAlignmentChain.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -100,7 +100,7 @@ void AlignmentChains::load_from_paf(path paf_path) {
 }
 
 void print_subchains(
-        const AlignmentChain& chain,
+        const PafAlignmentChain& chain,
         const set<pair<size_t, size_t> >& subchain_bounds,
         const string& read_name) {
 
@@ -116,7 +116,7 @@ void print_subchains(
 }
 
 
-void AlignmentChain::add(ChainElement& e) {
+void PafAlignmentChain::add(ChainElement& e) {
     chain.emplace_back(e);
 }
 
@@ -225,17 +225,17 @@ bool compare_chain_elements(ChainElement& a, ChainElement& b) {
 }
 
 
-size_t AlignmentChain::size() const {
+size_t PafAlignmentChain::size() const {
     return chain.size();
 }
 
 
-void AlignmentChain::sort_chain() {
+void PafAlignmentChain::sort_chain() {
     sort(chain.begin(), chain.end(), compare_chain_elements);
 }
 
 
-uint32_t AlignmentChain::compute_distance(ChainElement& a, ChainElement& b) {
+uint32_t PafAlignmentChain::compute_distance(ChainElement& a, ChainElement& b) {
     uint32_t distance = 0;
     if (a.ref_name == b.ref_name) {
         auto a_start = a.get_forward_start();
@@ -260,7 +260,7 @@ uint32_t AlignmentChain::compute_distance(ChainElement& a, ChainElement& b) {
 }
 
 
-void AlignmentChain::split(set<pair<size_t, size_t> >& subchain_bounds, pair<size_t, size_t> bounds) {
+void PafAlignmentChain::split(set<pair<size_t, size_t> >& subchain_bounds, pair<size_t, size_t> bounds) {
     // For the first recursion, load the result object
     if (subchain_bounds.empty()) {
         bounds = {0, chain.size()};

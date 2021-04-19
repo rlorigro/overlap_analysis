@@ -89,8 +89,8 @@ void plot_mummer_matches(const string& ref, const string& query, SvgPlot& plot){
                     color);
         }
     });
-
 }
+
 
 size_t compute_all_vs_all(vector <FastqElement>& sequences){
     size_t n_comparisons = 0;

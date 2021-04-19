@@ -19,10 +19,9 @@ set(CMAKE_CXX_FLAGS )
 #set(ASAN_OPTIONS=check_initialization_order=1)
 #set(ASAN_OPTIONS=detect_leaks=1)
 
-set(CMAKE_CXX_FLAGS "-fsanitize=address -fexceptions")
-
-add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
-#add_definitions(-O3 -Wall)              # Much optimization
+#set(CMAKE_CXX_FLAGS "-fsanitize=address -fexceptions")
+#add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
+add_definitions(-O3 -Wall)              # Much optimization
 
 # Definitions needed to eliminate runtime dependency
 # on the boost system library.
@@ -49,8 +48,10 @@ include_directories(
 
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
-        src/AlignmentChain.cpp
+        src/PafAlignmentChain.cpp
         src/Color.cpp
+        src/DagAligner.cpp
+        src/DiagonalTree.cpp
         src/dotplot.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
@@ -246,6 +247,8 @@ set(TESTS
         test_boost_interval_map
         test_boost_rtree
         test_chaining
+        test_dag
+        test_diagonal_tree
         test_edlib
         test_ogdf
         test_gnuplot

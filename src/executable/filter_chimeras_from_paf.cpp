@@ -1,4 +1,4 @@
-#include "AlignmentChain.hpp"
+#include "PafAlignmentChain.hpp"
 
 #include <experimental/filesystem>
 #include <iostream>
@@ -33,11 +33,11 @@ using boost::program_options::bool_switch;
 using boost::program_options::value;
 
 using overlap_analysis::AlignmentChains;
-using overlap_analysis::AlignmentChain;
+using overlap_analysis::PafAlignmentChain;
 using overlap_analysis::ChainElement;
 
 
-bool chain_is_palindromic(const AlignmentChain& chain, const pair <size_t, size_t>& bounds){
+bool chain_is_palindromic(const PafAlignmentChain& chain, const pair <size_t, size_t>& bounds){
     bool is_palindromic = false;
 
     uint32_t prev_midpoint = 0;

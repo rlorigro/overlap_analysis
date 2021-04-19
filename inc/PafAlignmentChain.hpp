@@ -1,5 +1,5 @@
-#ifndef OVERLAP_ANALYSIS_ALIGNMENTCHAIN_HPP
-#define OVERLAP_ANALYSIS_ALIGNMENTCHAIN_HPP
+#ifndef OVERLAP_ANALYSIS_PAFALIGNMENTCHAIN_HPP
+#define OVERLAP_ANALYSIS_PAFALIGNMENTCHAIN_HPP
 
 #include <experimental/filesystem>
 #include <ostream>
@@ -61,7 +61,7 @@ public:
 ostream& operator<<(ostream& o, const ChainElement& e);
 
 
-class AlignmentChain {
+class PafAlignmentChain {
 public:
     vector <ChainElement> chain;
 
@@ -72,7 +72,7 @@ public:
     static const uint32_t gap_penalty = 5000;
 
     /// Methods ///
-    AlignmentChain()=default;
+    PafAlignmentChain()=default;
     void add(ChainElement& e);
     void sort_chain();
     void split(set <pair <size_t, size_t> >& subchain_bounds, pair <size_t, size_t> bounds = {0,0});
@@ -82,14 +82,14 @@ public:
 
 
 void print_subchains(
-        const AlignmentChain& chain,
+        const PafAlignmentChain& chain,
         const set <pair <size_t, size_t> >& subchain_bounds,
         const string& read_name);
 
 
 class AlignmentChains {
 public:
-    map <string, AlignmentChain> chains;
+    map <string, PafAlignmentChain> chains;
 
     // Ignore alignments with mapQ score less than this
     static const uint32_t min_quality = 5;
@@ -106,4 +106,4 @@ public:
 
 }
 
-#endif //OVERLAP_ANALYSIS_ALIGNMENTCHAIN_HPP
+#endif //OVERLAP_ANALYSIS_PAFALIGNMENTCHAIN_HPP

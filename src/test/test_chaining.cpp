@@ -1,4 +1,4 @@
-#include "AlignmentChain.hpp"
+#include "PafAlignmentChain.hpp"
 #include <experimental/filesystem>
 
 using std::experimental::filesystem::create_directories;

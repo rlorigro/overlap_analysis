@@ -5,6 +5,7 @@
 using overlap_analysis::FastqElement;
 using overlap_analysis::FastqIterator;
 
+
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -18,13 +19,25 @@ using std::pow;
 using std::vector;
 using std::cerr;
 
+
 #include "boost/program_options.hpp"
 #include "boost/bimap.hpp"
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point.hpp>
+#include <boost/geometry/geometries/box.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
 using boost::program_options::bool_switch;
 using boost::program_options::value;
+using boost::geometry::model::point;
+using boost::geometry::model::box;
+using boost::geometry::cs::cartesian;
+using boost::geometry::index::rtree;
+using boost::geometry::index::quadratic;
+using boost::geometry::index::intersects;
+
 
 #include "edlib.h"
 #include "mummer/sparseSA.hpp"
@@ -55,16 +68,6 @@ template <class T> void plot_diagonal_scores(vector<T>& diagonal_scores, SvgPlot
         plot.add_line(x,T(0),x,diagonal_scores[x],1,"blue");
     }
 }
-
-
-//template <class T> void find_most_massive_cluster(vector<T>& x, max_distance){
-//
-//}
-//
-//
-//void find_band(){
-//
-//}
 
 
 size_t get_diagonal(size_t y_size, size_t x, size_t y){
