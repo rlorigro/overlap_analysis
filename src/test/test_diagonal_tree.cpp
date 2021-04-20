@@ -82,7 +82,7 @@ void time(){
     vector<pair <pair <size_t, size_t>, size_t> > result;
     for (size_t i=0; i<800; i++){
         for (size_t j=0; j<80; j++) {
-            tree.find(i,j,1,result);
+            tree.find(i,j,10,result,true);
         }
     }
 

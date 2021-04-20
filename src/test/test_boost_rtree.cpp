@@ -49,7 +49,7 @@ void test_pack_method(){
 
     for (size_t i=0; i<800; i++){
         for (size_t j=0; j<80; j++) {
-            box q(point{i,j},point{i+1,j+1});
+            box q(point{i,j},point{i+10,j+10});
 
             tree.query(intersects(q), std::back_inserter(result));
         }
@@ -84,7 +84,7 @@ void test_dynamic_method(){
 
     for (size_t i=0; i<800; i++){
         for (size_t j=0; j<80; j++) {
-            box q(point{i,j},point{i+1,j+1});
+            box q(point{i,j},point{i+10,j+10});
 
             tree.query(intersects(q), std::back_inserter(result));
         }

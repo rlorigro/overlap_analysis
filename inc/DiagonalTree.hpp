@@ -28,6 +28,7 @@ public:
     size_t y_size;
 
     DiagonalTree(size_t x_size, size_t y_size);
+    DiagonalTree(const vector <pair <pair <size_t,size_t>, size_t> >& matches, size_t x_size, size_t y_size);
 
     size_t get_x_diagonal(size_t x, size_t y);
     size_t get_y_diagonal(size_t x, size_t y);
@@ -37,12 +38,19 @@ public:
 
     void insert(size_t x, size_t y, size_t value);
 
-    void find(size_t x, size_t y, size_t box_length, vector<pair <pair <size_t, size_t>, size_t> >& results);
+    void find(
+            size_t x,
+            size_t y,
+            size_t box_length,
+            vector<pair <pair <size_t, size_t>, size_t> >& results,
+            bool first_only=false);
+
     void get_range_from_tree(
             size_t x_diag,
             size_t a,
             size_t b,
-            vector<pair <pair <size_t, size_t>, size_t> >& results);
+            vector<pair <pair <size_t, size_t>, size_t> >& results,
+            bool first_only=false);
 };
 
 
@@ -51,6 +59,20 @@ DiagonalTree::DiagonalTree(size_t x_size, size_t y_size):
     x_size(x_size),
     y_size(y_size)
 {}
+
+
+DiagonalTree::DiagonalTree(const vector <pair <pair <size_t,size_t>, size_t> >& matches, size_t x_size, size_t y_size):
+    diagonals(x_size + y_size - 1),
+    x_size(x_size),
+    y_size(y_size)
+{
+    for (const auto& m: matches){
+        auto x = m.first.first;
+        auto y = m.first.second;
+
+        insert(x, y, m.second);
+    }
+}
 
 
 size_t DiagonalTree::get_x_diagonal(size_t x, size_t y){
@@ -89,7 +111,8 @@ void DiagonalTree::get_range_from_tree(
         size_t x_diag,
         size_t a,
         size_t b,
-        vector<pair <pair <size_t, size_t>, size_t> >& results){
+        vector<pair <pair <size_t, size_t>, size_t> >& results,
+        bool first_only){
 
     auto lower = diagonals[x_diag].lower_bound(a);
     auto upper = diagonals[x_diag].upper_bound(b);
@@ -100,11 +123,22 @@ void DiagonalTree::get_range_from_tree(
             auto y = get_y(x_diag, it->first);
 
             results.emplace_back(make_pair(x,y), it->second);
+
+            if (first_only){
+                break;
+            }
         }
     }
 }
 
 
+///
+/// \param x
+/// \param y
+/// \param box_length
+/// \param results
+/// \param first_only If true, then only the first result per diagonal will be returned.
+///
 //     Box length specifies the region beyond the given xy point to search. For example, if box length = 1:
 //
 //         x 1
@@ -114,7 +148,7 @@ void DiagonalTree::get_range_from_tree(
 //
 //      This entire grid will return results if any are contained.
 //
-void DiagonalTree::find(size_t x, size_t y, size_t box_length, vector<pair <pair <size_t, size_t>, size_t> >& results) {
+void DiagonalTree::find(size_t x, size_t y, size_t box_length, vector<pair <pair <size_t, size_t>, size_t> >& results, bool first_only) {
     if (x > x_size or y > y_size){
         return;
     }
@@ -132,7 +166,7 @@ void DiagonalTree::find(size_t x, size_t y, size_t box_length, vector<pair <pair
         auto x_diag = get_x_diagonal(i,y);
         auto y_diag = get_y_diagonal(i,y);
 
-        get_range_from_tree(x_diag, y_diag, y_diag+search_space, results);
+        get_range_from_tree(x_diag, y_diag, y_diag+search_space, results, first_only);
         search_space--;
     }
 
@@ -148,7 +182,7 @@ void DiagonalTree::find(size_t x, size_t y, size_t box_length, vector<pair <pair
         auto x_diag = get_x_diagonal(x,i);
         auto y_diag = get_y_diagonal(x,i);
 
-        get_range_from_tree(x_diag, y_diag, y_diag+search_space, results);
+        get_range_from_tree(x_diag, y_diag, y_diag+search_space, results, first_only);
         search_space--;
     }
 }
