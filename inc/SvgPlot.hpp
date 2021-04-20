@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <cmath>
 
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::absolute;
@@ -20,6 +21,9 @@ using std::vector;
 using std::cerr;
 using std::cout;
 using std::array;
+using std::abs;
+using std::tan;
+using std::atan;
 
 
 class SvgPlot{
@@ -91,6 +95,21 @@ public:
             string& type,
             T2 size,
             T3& color);
+
+    template <class T, class T2, class T3, class T4> void add_curve(
+            const T x,
+            const T y,
+            const T x2,
+            const T y2,
+            const T4 curve_depth,
+            T2 width,
+            T3& color);
+
+    template <class T, class T2, class T3, class T4> void add_disjoint_curves(
+            const vector <array <T, 4> >& coordinates,
+            T4 curve_depth,
+            T2 width,
+            T3& color);
 };
 
 
@@ -155,6 +174,73 @@ template <class T, class T2, class T3> void SvgPlot::add_disjoint_lines(
     for (const auto& c: coordinates){
         file << '\t' << "<line x1='" << c[0] << "' y1='" << c[1] << "' x2='" << c[2] << "' y2='" << c[3]
              << "' stroke='" << color << "' stroke-width='" << width << "' />\n";
+    }
+}
+
+
+// Use cubic bezier curve with right angle to draw a curve between 2 coordinates
+template <class T, class T2, class T3, class T4> void SvgPlot::add_curve(
+        const T x,
+        const T y,
+        const T x2,
+        const T y2,
+        const T4 curve_depth,
+        T2 width,
+        T3& color){
+
+    check_file();
+
+    // Compute slope and right angle slope
+    double slope = (double(y2) - double(y)) / (double(x2) - double(x));
+    slope = round(slope*1000.0)/1000.0;
+
+    double delta_y;
+    double delta_x;
+
+    double length;
+
+    if (abs(slope) == 0) {
+        delta_y = 1;
+        delta_x = 0;
+        length = x2 - x;
+    }
+    else if (x2 == x) {
+        delta_y = 0;
+        delta_x = 1;
+        length = y2 - y;
+    }
+    else {
+        double ortho_slope = tan(atan(slope)+(3.14159/2.0));
+        delta_x = 1/(sqrt(pow(ortho_slope,2)+1));
+        delta_y = ortho_slope/(sqrt(pow(ortho_slope,2)+1));
+        length = sqrt(pow(double(y2-y),2.0) + pow(double(x2-x),2.0));
+    }
+
+    double cx = x + delta_x*curve_depth;
+    double cy = y + delta_y*curve_depth;
+
+    double cx2 = x2 + delta_x*curve_depth;
+    double cy2 = y2 + delta_y*curve_depth;
+
+    file << '\t' << "<path d="
+         << "'M " << x << " " << y
+         << " C " << cx << " " << cy
+         << ", " << cx2 << " " << cy2
+         << ", " << x2 << " " << y2
+         << "' stroke='" << color << "' stroke-width='" << width << "' fill='none'/>" << '\n';
+}
+
+
+template <class T, class T2, class T3, class T4> void SvgPlot::add_disjoint_curves(
+        const vector <array <T, 4> >& coordinates,
+        T4 curve_depth,
+        T2 width,
+        T3& color){
+
+    check_file();
+
+    for (const auto& c: coordinates){
+        add_curve(c[0], c[1], c[2], c[3], curve_depth, width, color);
     }
 }
 
