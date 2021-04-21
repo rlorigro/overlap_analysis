@@ -27,14 +27,14 @@ using std::pair;
 
 
 void test_pack_method(){
-    typedef point<float, 2, cartesian> point;
+    typedef point<size_t, 2, cartesian> point;
 
     vector<point> points;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     for (size_t i=0; i<800; i++){
         for (size_t j=0; j<80; j++) {
-            points.emplace_back(point {i+0.5f,j+0.5f});
+            points.emplace_back(point {i,j});
         }
     }
 
@@ -62,7 +62,7 @@ void test_pack_method(){
 
 
 void test_dynamic_method(){
-    typedef point<float, 2, cartesian> point;
+    typedef point<size_t, 2, cartesian> point;
 
     vector<point> points;
 
@@ -72,7 +72,7 @@ void test_dynamic_method(){
     auto t1 = std::chrono::high_resolution_clock::now();
     for (size_t i=0; i<800; i++){
         for (size_t j=0; j<80; j++) {
-            tree.insert(point {i+0.5f,j+0.5f});
+            tree.insert(point {i,j});
         }
     }
 

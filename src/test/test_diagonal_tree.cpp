@@ -57,7 +57,7 @@ void test(){
         vector <pair <pair <size_t,size_t>, size_t> > results;
 
         cerr << "finding: " << m.first.first+m.second << ' ' << m.first.second+m.second << '\n';
-        tree.find(m.first.first+m.second, m.first.second+m.second, 1, results);
+        tree.find(m.first.first+m.second, m.first.second+m.second, 3, results);
         cerr << '\n';
     }
 }
@@ -96,6 +96,6 @@ void time(){
 int main()
 {
     test();
-    time();
+//    time();
     return 0;
 }

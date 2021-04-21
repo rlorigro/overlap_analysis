@@ -197,23 +197,18 @@ template <class T, class T2, class T3, class T4> void SvgPlot::add_curve(
     double delta_y;
     double delta_x;
 
-    double length;
-
     if (abs(slope) == 0) {
         delta_y = 1;
         delta_x = 0;
-        length = x2 - x;
     }
     else if (x2 == x) {
         delta_y = 0;
         delta_x = 1;
-        length = y2 - y;
     }
     else {
         double ortho_slope = tan(atan(slope)+(3.14159/2.0));
         delta_x = 1/(sqrt(pow(ortho_slope,2)+1));
         delta_y = ortho_slope/(sqrt(pow(ortho_slope,2)+1));
-        length = sqrt(pow(double(y2-y),2.0) + pow(double(x2-x),2.0));
     }
 
     double cx = x + delta_x*curve_depth;

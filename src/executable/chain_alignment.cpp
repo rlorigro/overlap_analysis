@@ -1,4 +1,5 @@
 #include "FastqIterator.hpp"
+#include "DagAligner.hpp"
 #include "SvgPlot.hpp"
 #include "Kernel.hpp"
 
@@ -63,19 +64,36 @@ void plot_mummer_matches(const vector<match_t>& matches, SvgPlot& plot, size_t l
 }
 
 
-template <class T> void plot_diagonal_scores(vector<T>& diagonal_scores, SvgPlot& plot){
-    for (T x=0; x<diagonal_scores.size(); x++){
-        plot.add_line(x,T(0),x,diagonal_scores[x],1,"blue");
-    }
+void align(const FastqElement& s, const FastqElement& s2, path output_directory){
+    const string& ref = s.sequence;
+    const string& query = s2.sequence;
+
+    // Construct suffix array
+    auto matcher = sparseSA::create_auto(ref.c_str(), ref.size(), 0, true);
+    vector <pair <coord_t, size_t> > matches;
+
+    // Search suffix array for exact matches
+    matcher.findMAM_each(query, 10, false, [&](const match_t& m){
+        matches.emplace_back(make_pair(make_pair(m.ref, m.query), m.len));
+    });
+
+    Dag dag(matches, ref.size(), query.size(), 200);
+
+    // Set up plot
+    path plot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
+//    dag.write_to_svg(plot_path);
+
+    dag.compute_alignment();
+
+    path plot_path2 = output_directory / (s.name + "_vs_" + s2.name + "_aligned.svg");
+//    dag.write_to_svg(plot_path2);
+
+    cerr << s.name << ' ' << s2.name << ' ' << matches.size() << '\n';
+
 }
 
 
-size_t get_diagonal(size_t y_size, size_t x, size_t y){
-    return (y_size - 1) - y + x;
-}
-
-
-size_t compute_all_vs_all(vector <FastqElement>& sequences){
+size_t align_all_vs_all(vector <FastqElement>& sequences){
     size_t n_comparisons = 0;
 
     path output_directory = "plots/";
@@ -84,50 +102,13 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences){
         create_directories(absolute(output_directory));
     }
 
-    GaussianSmoother smoother(5,2);
-
     for (const auto& s: sequences) {
         for (const auto& s2: sequences) {
             if (s.name == s2.name) {
                 continue;
             }
 
-            const string& ref = s.sequence;
-            const string& query = s2.sequence;
-
-            // Set up plot
-            path dotplot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
-            SvgPlot dotplot(dotplot_path, 800, 800, 0, ref.size(), 0, query.size(), true);
-
-            // Construct suffix array
-            auto matcher = sparseSA::create_auto(ref.c_str(), ref.size(), 0, true);
-            vector<match_t> matches;
-            vector<size_t> diagonal_scores(ref.size() + query.size() - 1, 0);
-            vector<size_t> smooth_diagonal_scores(ref.size() + query.size() - 1, 0);
-
-            // Search suffix array for exact matches
-            matcher.findMAM_each(query, 10, false, [&](const match_t& m){
-                matches.emplace_back(m);
-
-                // Accumulate scores for each diagonal
-                auto d = get_diagonal(query.size(), m.ref, m.query);
-
-                diagonal_scores[d] += pow(m.len,2);
-            });
-
-            cerr << s.name << ' ' << s2.name << ' ' << matches.size() << '\n';
-
-            plot_mummer_matches(matches, dotplot, ref.size()/1000);
-
-            smoother.smooth(diagonal_scores, smooth_diagonal_scores);
-
-            auto max_score = *max_element(diagonal_scores.begin(), diagonal_scores.end());
-            cerr << max_score << '\n';
-
-            path diagonal_plot_path = output_directory / (s.name + "_vs_" + s2.name + "_diagonals.svg");
-            SvgPlot diagonal_plot(diagonal_plot_path, 800, 800, 0, ref.size() + query.size(), 0, max_score, true);
-
-            plot_diagonal_scores(smooth_diagonal_scores, diagonal_plot);
+            align(s, s2, output_directory);
 
             n_comparisons++;
         }
@@ -151,7 +132,14 @@ void test(path fastq_path){
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }
 
-    compute_all_vs_all(sequences);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    auto total_comparisons = align_all_vs_all(sequences);
+
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    cerr << "Alignment completed in: " << elapsed.count() << " milliseconds" << '\n';
+    cerr << "Total alignments: " << total_comparisons << '\n';
 }
 
 

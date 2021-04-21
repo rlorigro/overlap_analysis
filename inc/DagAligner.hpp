@@ -32,6 +32,7 @@ using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::path;
 using std::runtime_error;
 using std::shared_ptr;
+using std::to_string;
 using std::vector;
 using std::cerr;
 using std::make_pair;
@@ -54,16 +55,18 @@ using xy_match = pair<xy_point, size_t>;
 // x,y coords are used to compute gap (edge) scores later, based on some scoring scheme
 class Node {
 public:
-    // vector indexes which point to neighbor nodes
-     vector <size_t> prev;
-     vector <size_t> next;
+    // Vector indexes which point to neighbor nodes
+    vector <size_t> prev;
+    vector <size_t> next;
 
     size_t x;
     size_t y;
     size_t length;
     int64_t score;
 
-    Node(size_t x, size_t y, size_t length);
+    Node(size_t x, size_t y, size_t length, size_t score);
+    size_t get_x_stop();
+    size_t get_y_stop();
 };
 
 
@@ -79,6 +82,10 @@ public:
     size_t n_edges;
     size_t max_gap;
 
+    int64_t match_score = 1;
+    int64_t gap_open_score = -1;
+    int64_t gap_score = -1;
+
     const size_t SOURCE_INDEX = 0;
     const size_t SINK_INDEX = 1;
     const size_t START_INDEX = 2;
@@ -90,6 +97,13 @@ public:
     void compute_alignment();
 
     void write_to_svg(path output_path);
+
+
+
+private:
+    void step_alignment_forward(size_t i, vector<size_t>& max_prev);
+    size_t get_x_diagonal(Node& n);
+    size_t get_y_diagonal(Node& n);
 };
 
 
@@ -117,7 +131,11 @@ template <class T> void Dag::for_each_in_kahns_iteration(T f){
     vector<size_t> l;
     queue<size_t> s;
 
-    s.push(SOURCE_INDEX);
+    for (size_t i=0; i<nodes.size(); i++) {
+        if (nodes[i].prev.empty()){
+            s.push(i);
+        }
+    }
 
     while (not s.empty()){
         const auto i = s.front();
@@ -128,11 +146,7 @@ template <class T> void Dag::for_each_in_kahns_iteration(T f){
         f(i);
         l.emplace_back(i);
 
-        cerr << i << ' ' << nodes[i].next.size() << '\n';
-
         for (auto j: nodes[i].next){
-            cerr << "next node: " << j << '\n';
-
             edge_counts[j]++;
             edges_counted++;
 
@@ -143,7 +157,8 @@ template <class T> void Dag::for_each_in_kahns_iteration(T f){
     }
 
     if (edges_counted != n_edges){
-        throw runtime_error("ERROR: graph contains cycles");
+        throw runtime_error("ERROR: graph not a DAG:\n" \
+                            "\tn_edges: " + to_string(n_edges) + ", edges iterated: " + to_string(edges_counted));
     }
 }
 

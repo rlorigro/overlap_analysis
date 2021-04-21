@@ -2,19 +2,39 @@
 #include "DagAligner.hpp"
 #include "SvgPlot.hpp"
 
-#include <numeric>
+#include <cmath>
 
 using std::max;
 
 
-Node::Node(size_t x, size_t y, size_t length):
+Node::Node(size_t x, size_t y, size_t length, size_t score):
     prev(),
     next(),
     x(x),
     y(y),
     length(length),
-    score(0)
+    score(score)
 {}
+
+
+size_t Node::get_x_stop() {
+    if (length == 0){
+        return x;
+    }
+    else {
+        return x + length - 1;
+    }
+}
+
+
+size_t Node::get_y_stop() {
+    if (length == 0){
+        return y;
+    }
+    else {
+        return y + length - 1;
+    }
+}
 
 
 ostream& operator<<(ostream& o, Node& n){
@@ -42,6 +62,7 @@ Dag::Dag(const vector<xy_match>& matches, size_t x_size, size_t y_size, size_t m
         alignment_path(),
         x_size(x_size),
         y_size(y_size),
+        n_edges(0),
         max_gap(max_gap)
 {
     rtree <xy_match, quadratic<30> > tree(matches);
@@ -74,24 +95,26 @@ Dag::Dag(const vector <pair <coord_t,size_t> >& matches, size_t x_size, size_t y
         alignment_path(),
         x_size(x_size),
         y_size(y_size),
+        n_edges(0),
         max_gap(max_gap)
 {
-    //TODO: add and test `first_only` flag
+    // Nodes are initialized with the largest possible negative score
+    int64_t start_score = gap_open_score + x_size*gap_score + y_size*gap_score;
 
     DiagonalTree tree(x_size, y_size);
 
     // Node index 0 is reserved for the 'source' placeholder
-    nodes.emplace_back(0,0,0);
+    nodes.emplace_back(0,0,0,0);
 
     // Node index 1 is reserved for the 'sink' placeholder
-    nodes.emplace_back(x_size,y_size,0);
+    nodes.emplace_back(x_size,y_size,0,start_score);
 
     // Construct spatial index for matches in the matrix
     for (const auto& m: matches){
         auto x = m.first.first;
         auto y = m.first.second;
 
-        nodes.emplace_back(x, y, m.second);
+        nodes.emplace_back(x, y, m.second, start_score);
 
         // Each entry in the tree points to an index in the node list
         tree.insert(x, y, nodes.size() - 1);
@@ -105,11 +128,11 @@ Dag::Dag(const vector <pair <coord_t,size_t> >& matches, size_t x_size, size_t y
 
         auto& node = nodes[i];
 
-        size_t x_stop = node.x + node.length;
-        size_t y_stop = node.y + node.length;
+        size_t x_stop = node.get_x_stop();
+        size_t y_stop = node.get_y_stop();
 
         vector <pair <coord_t, size_t> > results;
-        tree.find(x_stop, y_stop, max_gap, results);
+        tree.find(x_stop, y_stop, max_gap, results, true);
 
         // Given the nearest down-diagonal matches within a certain gap size, add edges in the graph to those matches
         for (const auto& r: results){
@@ -118,9 +141,8 @@ Dag::Dag(const vector <pair <coord_t,size_t> >& matches, size_t x_size, size_t y
             adjacent_node.prev.emplace_back(i);
             n_edges++;
 
-            cerr << node.x << ' ' << node.y << " (" << r.first.first << ',' << r.first.second << ")=" << r.second << '\n';
+//            cerr << node.x << ' ' << node.y << " (" << r.first.first << ',' << r.first.second << ")=" << r.second << '\n';
         }
-        cerr << '\n';
 
         // If it's close to the top/left boundary of the matrix then connect it to the source node
         if (node.x <= max_gap or node.y <= max_gap){
@@ -139,34 +161,49 @@ Dag::Dag(const vector <pair <coord_t,size_t> >& matches, size_t x_size, size_t y
 }
 
 
+size_t Dag::get_x_diagonal(Node& n){
+    return (y_size - 1) - n.y + n.x;
+}
+
+
+size_t Dag::get_y_diagonal(Node& n){
+    return n.x + n.y;
+}
+
+
+void Dag::step_alignment_forward(size_t i, vector<size_t>& max_prev){
+    if (i == SOURCE_INDEX){
+        nodes[i].score = 0;
+    }
+    else {
+        for (const auto j: nodes[i].prev){
+            int64_t prev_diagonal = get_x_diagonal(nodes[j]);
+            int64_t diagonal = get_x_diagonal(nodes[i]);
+            int64_t gap_size = abs(diagonal-prev_diagonal);
+
+            int64_t score = nodes[j].score + nodes[i].length*match_score;
+
+            // No gap cost for source/sink gaps, and no gap_open if gap=0
+            if (gap_size > 0 and j != SOURCE_INDEX and i != SINK_INDEX){
+                score += gap_size*gap_score + gap_open_score;
+            }
+
+            if (score > nodes[i].score){
+                nodes[i].score = score;
+                max_prev[i] = j;
+            }
+        }
+    }
+}
+
+
 void Dag::compute_alignment(){
-    vector <size_t> max_prev(nodes.size());
+    vector <size_t> max_prev(nodes.size(),0);
 
     // Forward pass
     for_each_in_kahns_iteration([&](const size_t i){
-        int64_t max_score;
-
-        if (i == SOURCE_INDEX){
-            max_score = 0;
-        }
-        else {
-            max_score = std::numeric_limits<int64_t>::min();
-
-            for (const auto j: nodes[i].prev){
-                if (nodes[j].score > max_score){
-                    max_score = nodes[j].score;
-                    max_prev[i] = j;
-                }
-            }
-        }
-
-        cerr << nodes[i].x << ' ' << nodes[i].y << ' ' << max_score << '\n';
-
+        step_alignment_forward(i, max_prev);
     });
-
-    for (size_t i=0; i<max_prev.size(); i++){
-        cerr << i << ' ' << max_prev[i] << '\n';
-    }
 
     // Traceback
     auto i = SINK_INDEX;
@@ -178,26 +215,35 @@ void Dag::compute_alignment(){
 
 
 void Dag::write_to_svg(path output_path){
-    SvgPlot plot(output_path, 800, 800, 0, x_size, 0, y_size, true);
+    cerr << "Writing SVG: " << output_path << '\n';
+
+    size_t width_px = 800;
+    size_t height_px = 800;
+    size_t line_width = max(width_px,height_px)*0.5;
+//    size_t line_width = 100;
+
+    SvgPlot plot(output_path, width_px, height_px, 0, x_size, 0, y_size, true);
     string point_type = "circle";
 
     // Plot all the matches and their edges
     for (size_t i=0; i<nodes.size(); i++){
         auto& node = nodes[i];
 
-        size_t x_stop = node.x + node.length;
-        size_t y_stop = node.y + node.length;
+        size_t x_stop = node.get_x_stop();
+        size_t y_stop = node.get_y_stop();
 
-        plot.add_line(node.x, node.y, x_stop, y_stop, double(max(x_size,y_size))/100, "black");
-        plot.add_point(node.x, node.y, point_type, double(max(x_size,y_size))/80, "black");
+        // Draw the match element
+        plot.add_line(node.x, node.y, x_stop, y_stop, double(line_width)/120.0, "gray");
+        plot.add_point(node.x, node.y, point_type, double(line_width)/120.0, "black");
 
         for (size_t j: node.prev){
             auto& prev_node = nodes[j];
 
-            auto prev_x_stop = prev_node.x + prev_node.length;
-            auto prev_y_stop = prev_node.y + prev_node.length;
+            auto prev_x_stop = prev_node.get_x_stop();
+            auto prev_y_stop = prev_node.get_y_stop();
 
-            plot.add_line(prev_x_stop, prev_y_stop, node.x, node.y, double(max(x_size,y_size))/400, "orange");
+            // Draw edge between matches
+            plot.add_curve(prev_x_stop, prev_y_stop, node.x, node.y, double(line_width)/40.0, double(line_width)/800.0, "orange");
         }
     }
 
@@ -207,22 +253,24 @@ void Dag::write_to_svg(path output_path){
 
         auto& node = nodes[i];
 
-        size_t x_stop = node.x + node.length;
-        size_t y_stop = node.y + node.length;
+        size_t x_stop = node.get_x_stop();
+        size_t y_stop = node.get_y_stop();
 
-        plot.add_line(node.x, node.y, x_stop, y_stop, double(max(x_size,y_size))/600, "red");
-        plot.add_point(node.x, node.y, point_type, double(max(x_size,y_size))/160, "red");
+        // Overlay on top of match
+        plot.add_line(node.x, node.y, x_stop, y_stop, double(line_width)/600.0, "red");
+        plot.add_point(node.x, node.y, point_type, double(line_width)/180.0, "red");
 
         if (path_index > 0){
             auto j = alignment_path[path_index-1];
 
             auto& prev_node = nodes[j];
 
-            auto prev_x_stop = prev_node.x + prev_node.length;
-            auto prev_y_stop = prev_node.y + prev_node.length;
+            auto prev_x_stop = prev_node.get_x_stop();
+            auto prev_y_stop = prev_node.get_y_stop();
 
-            plot.add_line(prev_x_stop, prev_y_stop, node.x, node.y, double(max(x_size,y_size))/600, "red");
-            plot.add_point(node.x, node.y, point_type, double(max(x_size,y_size))/160, "red");
+            // Overlay on top of edge
+            plot.add_curve(prev_x_stop, prev_y_stop, node.x, node.y, double(line_width)/40.0, double(line_width)/1000.0, "red");
+            plot.add_point(node.x, node.y, point_type, double(line_width)/180.0, "red");
         }
     }
 }
