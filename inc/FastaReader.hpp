@@ -50,7 +50,7 @@ public:
     FastaReader();
 
     // Fetch header + sequence assuming read position precedes a header
-    void next_element(SequenceElement& element);
+    bool next_element(SequenceElement& element);
 
     // Generate index if needed, otherwise load index
     void index();

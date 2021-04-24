@@ -29,14 +29,16 @@ size_t compute_all_vs_all(vector <FastqElement>& sequences, uint32_t min_length)
     size_t n_comparisons = 0;
 
     for (const auto& s: sequences) {
-        auto matcher = mummer::mummer::sparseSA::create_auto(s.sequence.c_str(), s.sequence.size(), 0, true);
-
-        vector<match_t> matches;
 
         for (const auto& s2: sequences) {
             if (s.name == s2.name) {
                 continue;
             }
+
+            auto matcher = mummer::mummer::sparseSA::create_auto(s.sequence.c_str(), s.sequence.size(), 0, true);
+
+            vector<match_t> matches;
+
 
             matcher.findMUM_each(s2.sequence, min_length, false, [&](const match_t& match) {
                 matches.emplace_back(match);
@@ -69,7 +71,7 @@ void test(path fastq_path){
 
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         sequences.emplace_back(element);
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }

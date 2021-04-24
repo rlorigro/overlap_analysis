@@ -76,7 +76,7 @@ void self_align(path fastq_path){
 
     FastqIterator fastq_iterator(fastq_path);
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         path visualization_path = element.name + "_matrix.svg";
 
         int32_t b = 1 * sqrt(element.sequence.size() + element.sequence.size()) * mismatch_penalty;
@@ -96,7 +96,7 @@ void self_align(path fastq_path){
             cerr << rc_sequence << '\n';
         }
 
-        auto cigars = wavefront_align(element.sequence, rc_sequence, scores, a, b, prune, visualization_path);
+        auto cigars = wavefront_align(element.sequence, rc_sequence, scores, a, b, prune, "");
 
         if (cigars.empty()){
             cerr << "Alignment aborted" << '\n';

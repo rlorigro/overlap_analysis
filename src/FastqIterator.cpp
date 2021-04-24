@@ -35,7 +35,12 @@ size_t FastqIterator::get_line_number() const{
 }
 
 
-bool FastqIterator::next_fastq_element(FastqElement& element){
+FastqElement FastqIterator::generate_sequence_container(){
+    return FastqElement();
+}
+
+
+bool FastqIterator::next_element(FastqElement& element){
     if (file.eof() or file.peek() == EOF){
         return false;
     }

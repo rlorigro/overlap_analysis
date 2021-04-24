@@ -96,7 +96,7 @@ public:
     template <class T> void for_each_in_kahns_iteration(T function);
     void compute_alignment();
 
-    void write_to_svg(path output_path);
+    void write_to_svg(path output_path, bool autoscale=true);
 
 
 

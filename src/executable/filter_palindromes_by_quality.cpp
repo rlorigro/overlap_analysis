@@ -92,7 +92,7 @@ int main(int argc, char **argv){
     vector<FastqElement> result;
 
     size_t i = 0;
-    while (iterator.next_fastq_element(e)) {
+    while (iterator.next_element(e)) {
         if (i % 100 == 0) {
             cerr << "\33[2K\r" << i << std::flush;
         }

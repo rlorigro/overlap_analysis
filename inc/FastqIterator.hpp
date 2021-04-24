@@ -40,8 +40,10 @@ public:
     /// Methods ///
     FastqIterator(path file_path);
 
-    bool next_fastq_element(FastqElement& element);
+    bool next_element(FastqElement& element);
     size_t get_line_number() const;
+
+    FastqElement generate_sequence_container();
 
 private:
     /// Attributes ///

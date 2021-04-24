@@ -62,7 +62,7 @@ void test(path fastq_path){
 
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         sequences.emplace_back(element);
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }

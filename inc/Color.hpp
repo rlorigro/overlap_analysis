@@ -17,6 +17,18 @@ class ColorMap {
 };
 
 
+class MplJet: public ColorMap {
+public:
+    /// Attributes ///
+    static const vector <array <double,3> > rgbs;
+
+    /// Methods ///
+    MplJet()=default;
+    array<double,3> get_rgb(double x);
+    string get_svg_color(double x);
+};
+
+
 class Viridis: public ColorMap {
 public:
     /// Attributes ///
@@ -27,6 +39,7 @@ public:
     array<double,3> get_rgb(double x);
     string get_svg_color(double x);
 };
+
 
 
 

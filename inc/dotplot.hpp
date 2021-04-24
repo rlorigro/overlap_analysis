@@ -1,6 +1,8 @@
 #ifndef OVERLAP_ANALYSIS_DOTPLOT_HPP
 #define OVERLAP_ANALYSIS_DOTPLOT_HPP
 
+#include "SvgPlot.hpp"
+
 #include <experimental/filesystem>
 #include <string>
 
@@ -10,12 +12,17 @@ using std::runtime_error;
 using std::string;
 
 
+void reverse_complement(string& sequence, string& rc_sequence);
+
 void generate_dotplot(
-        string& name,
-        string& ref_sequence,
-        string& query_sequence,
+        const string& name,
+        const string& ref_sequence,
+        const string& query_sequence,
         uint32_t min_length,
-        path& output_directory
+        SvgPlot& plot,
+        bool both_strands = false,
+        int64_t x_offset = 0,
+        int64_t y_offset = 0
         );
 
 #endif //OVERLAP_ANALYSIS_DOTPLOT_HPP

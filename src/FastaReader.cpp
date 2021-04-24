@@ -304,8 +304,14 @@ void FastaReader::read_next_sequence(SequenceElement& element){
 
 
 // Read the next lines of the file and update the SequenceElement object. If no lines exists, toggle this->file_end
-void FastaReader::next_element(SequenceElement& element){
+bool FastaReader::next_element(SequenceElement& element){
+    if (this->end_of_file) {
+        return false;
+    }
+
     element = {};
     this->read_next_header(element);
     this->read_next_sequence(element);
+
+    return true;
 }

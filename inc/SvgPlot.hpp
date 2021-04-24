@@ -103,7 +103,8 @@ public:
             const T y2,
             const T4 curve_depth,
             T2 width,
-            T3& color);
+            T3& color,
+            bool negative_only=false);
 
     template <class T, class T2, class T3, class T4> void add_disjoint_curves(
             const vector <array <T, 4> >& coordinates,
@@ -186,7 +187,8 @@ template <class T, class T2, class T3, class T4> void SvgPlot::add_curve(
         const T y2,
         const T4 curve_depth,
         T2 width,
-        T3& color){
+        T3& color,
+        bool negative_only){
 
     check_file();
 
@@ -198,7 +200,7 @@ template <class T, class T2, class T3, class T4> void SvgPlot::add_curve(
     double delta_x;
 
     if (abs(slope) == 0) {
-        delta_y = 1;
+        delta_y = -1;
         delta_x = 0;
     }
     else if (x2 == x) {
@@ -209,6 +211,11 @@ template <class T, class T2, class T3, class T4> void SvgPlot::add_curve(
         double ortho_slope = tan(atan(slope)+(3.14159/2.0));
         delta_x = 1/(sqrt(pow(ortho_slope,2)+1));
         delta_y = ortho_slope/(sqrt(pow(ortho_slope,2)+1));
+
+        if (negative_only){
+            delta_x = -abs(delta_x);
+            delta_y = -abs(delta_y);
+        }
     }
 
     double cx = x + delta_x*curve_depth;

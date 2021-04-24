@@ -214,13 +214,19 @@ void Dag::compute_alignment(){
 }
 
 
-void Dag::write_to_svg(path output_path){
+void Dag::write_to_svg(path output_path, bool autoscale){
     cerr << "Writing SVG: " << output_path << '\n';
 
     size_t width_px = 800;
     size_t height_px = 800;
-    size_t line_width = max(width_px,height_px)*0.5;
-//    size_t line_width = 100;
+
+    size_t line_width;
+    if (autoscale) {
+        line_width = max(width_px,height_px)*0.5;
+    }
+    else{
+        line_width = 30;
+    }
 
     SvgPlot plot(output_path, width_px, height_px, 0, x_size, 0, y_size, true);
     string point_type = "circle";

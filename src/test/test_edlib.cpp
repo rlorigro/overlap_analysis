@@ -41,7 +41,7 @@ void plot_edlib_alignment(const string& ref, const string& query, SvgPlot& plot)
     size_t ref_index = ref_move[result.alignment[0]];
     size_t query_index = query_move[result.alignment[0]];
 
-    for (size_t i=0; i<200 and i<result.alignmentLength; i++) {
+    for (size_t i=0; i<200 and i<size_t(result.alignmentLength); i++) {
         cerr << int(result.alignment[i]);
     }
     cerr << '\n';
@@ -49,7 +49,7 @@ void plot_edlib_alignment(const string& ref, const string& query, SvgPlot& plot)
     cerr << ref.substr(0,200) << '\n';
     cerr << query.substr(0,200) << '\n';
 
-    for (size_t i=1; i<result.alignmentLength; i++){
+    for (size_t i=1; i<size_t(result.alignmentLength); i++){
         if (i > 0){
             if (result.alignment[i-1] != result.alignment[i]) {
                 plot.add_line(prev_ref_index, prev_query_index, ref_index, query_index, ref.size()/2000, "orange");
@@ -80,7 +80,7 @@ void plot_mummer_matches(const string& ref, const string& query, SvgPlot& plot){
     matcher.findMAM_each(query, 12, false, [&](const mummer::mummer::match_t& match){
         mams.emplace_back(match);
 
-        for (size_t i=0; i<match.len; i+=50) {
+        for (long i=0; i<match.len; i+=50) {
             plot.add_point(
                     match.ref + i,
                     match.query + i,
@@ -133,7 +133,7 @@ void test(path fastq_path){
 
     cerr << "Loading sequences..." << '\n';
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         sequences.emplace_back(element);
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }
