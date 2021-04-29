@@ -109,11 +109,16 @@ void filter_paf(path paf_path){
     AlignmentChains alignment_chains;
     alignment_chains.load_from_paf(paf_path);
 
-    path output_path = paf_path;
-    output_path.replace_extension("chimeric_reads.txt");
-    ofstream file(output_path);
+    path chimer_id_path = paf_path;
+    chimer_id_path.replace_extension("chimeric_reads.txt");
+    ofstream chimer_id_file(chimer_id_path);
 
-    cerr << "Writing chimeric reads to file: " << output_path << '\n';
+    path non_chimer_id_path = paf_path;
+    non_chimer_id_path.replace_extension("non_chimeric_reads.txt");
+    ofstream non_chimer_id_file(non_chimer_id_path);
+
+    cerr << "Writing chimeric reads to file: " << chimer_id_path << '\n';
+    cerr << "Writing non-chimeric reads to file: " << non_chimer_id_path << '\n';
 
     vector<size_t> non_chimer_lengths;
     vector<size_t> chimer_lengths;
@@ -147,11 +152,12 @@ void filter_paf(path paf_path){
                 }
             }
 
-            file << name << '\n';
+            chimer_id_file << name << '\n';
 
             print_subchains(chain, subchain_bounds, name);
         }
         else{
+            non_chimer_id_file << name << '\n';
             non_chimer_lengths_file << chain.chain[0].query_length << '\n';
         }
     }

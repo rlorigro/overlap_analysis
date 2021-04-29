@@ -80,7 +80,7 @@ uint32_t ChainElement::distance_to_end_of_contig() const {
 
 ostream& operator<<(ostream& o, const ChainElement& e) {
     o << '(' << e.query_start << ',' << e.query_stop << ")" << (e.is_reverse ? "-" : "+") << " " << e.ref_name << " "
-      << e.ref_start << " " << e.ref_stop << " " << e.ref_length;
+      << e.ref_start << " " << e.ref_stop << " " << e.ref_length << " " << e.map_quality;
     return o;
 }
 
@@ -111,7 +111,7 @@ void print_subchains(
             cerr << '\t' << chain.chain[i] << '\n';
         }
 
-        cerr << '\n' << '\n';
+        cerr << '\n';
     }
 }
 
