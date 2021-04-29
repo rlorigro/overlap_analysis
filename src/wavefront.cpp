@@ -13,6 +13,12 @@
 #include <iostream>
 #include <deque>
 
+#include <cmath>
+
+using std::round;
+using std::min;
+using std::max;
+
 struct Wavefront {
 public:
     Wavefront() {}
@@ -77,10 +83,16 @@ void wavefront_next(const std::string& seq1, const std::string& seq2,
         const auto& wf_prev = wfs[wfs.size() - scores.gap_extend - scores.gap_open - 1];
         for (auto k = lo; k < hi; ++k) {
             if (k - 1 >= wf_prev.diag_begin && k - 1 < wf_prev.diag_begin + (int64_t) wf_prev.M.size()) {
-                wf.I[k - lo] = wf_prev.M[k - 1 - wf_prev.diag_begin] + 1;
+                int64_t a = wf_prev.M[k - 1 - wf_prev.diag_begin] + 1;
+                if ((k + a) / 2 < (int64_t) seq1.size() && (a - k) / 2 < (int64_t) seq2.size()) {
+                    wf.I[k - lo] = a;
+                }
             }
             if (k + 1 >= wf_prev.diag_begin && k + 1 < wf_prev.diag_begin + (int64_t) wf_prev.M.size()) {
-                wf.D[k - lo] = wf_prev.M[k + 1 - wf_prev.diag_begin] + 1;
+                int64_t a = wf_prev.M[k + 1 - wf_prev.diag_begin] + 1;
+                if ((k + a) / 2 < (int64_t) seq1.size() && (a - k) / 2 < (int64_t) seq2.size()) {
+                    wf.D[k - lo] = a;
+                }
             }
         }
     }
@@ -90,13 +102,16 @@ void wavefront_next(const std::string& seq1, const std::string& seq2,
         const auto& wf_prev = wfs[wfs.size() - scores.gap_extend - 1];
         for (auto k = lo; k < hi; ++k) {
             if (k - 1 >= wf_prev.diag_begin && k - 1 < wf_prev.diag_begin + (int64_t) wf_prev.M.size()) {
-                wf.I[k - lo] = std::max<int32_t>(wf.I[k - lo],
-                                                 wf_prev.I[k - 1 - wf_prev.diag_begin] + 1);
-
+                int64_t a = wf_prev.I[k - 1 - wf_prev.diag_begin] + 1;
+                if ((k + a) / 2 < (int64_t) seq1.size() && (a - k) / 2 < (int64_t) seq2.size()) {
+                    wf.I[k - lo] = std::max<int32_t>(wf.I[k - lo], a);
+                }
             }
             if (k + 1 >= wf_prev.diag_begin && k + 1 < wf_prev.diag_begin + (int64_t) wf_prev.M.size()) {
-                wf.D[k - lo] = std::max<int32_t>(wf.D[k - lo],
-                                                 wf_prev.D[k + 1 - wf_prev.diag_begin] + 1);
+                int64_t a = wf_prev.D[k + 1 - wf_prev.diag_begin] + 1;
+                if ((k + a) / 2 < (int64_t) seq1.size() && (a - k) / 2 < (int64_t) seq2.size()) {
+                    wf.D[k - lo] = std::max<int32_t>(wf.D[k - lo], a);
+                }
             }
         }
     }
@@ -107,7 +122,10 @@ void wavefront_next(const std::string& seq1, const std::string& seq2,
         const auto& wf_prev = wfs[wfs.size() - scores.mismatch - 1];
         for (auto k = lo; k < hi; ++k) {
             if (k >= wf_prev.diag_begin && k < wf_prev.diag_begin + (int64_t) wf_prev.M.size()) {
-                wf.M[k - lo] = wf_prev.M[k - wf_prev.diag_begin] + 2;
+                int64_t a = wf_prev.M[k - wf_prev.diag_begin] + 2;
+                if ((k + a) / 2 < (int64_t) seq1.size() && (a - k) / 2 < (int64_t) seq2.size()) {
+                    wf.M[k - lo] = a;
+                }
             }
         }
     }
@@ -343,8 +361,26 @@ void print_wfs(const std::vector<Wavefront>& wfs) {
 
 void wavefront_viz(const std::string& seq1, const std::string& seq2,
                    const std::vector<Wavefront>& wfs, path output_path) {
+    size_t base_size = min(size_t(2000), max(seq1.size(), seq2.size()));
 
-    SvgPlot plot(output_path, 1200, 1200, 0, seq1.size(), 0, seq2.size());
+    size_t x_size;
+    size_t y_size;
+
+    if (seq1.size() > seq2.size()) {
+        x_size = ceil(double(seq2.size())/seq1.size()) * base_size;
+        y_size = base_size;
+    }
+    else{
+        x_size = base_size;
+        y_size = ceil(double(seq2.size())/seq1.size()) * base_size;
+    }
+
+    int32_t score_interval = wfs.size() / min(size_t(200), wfs.size());
+
+    cerr << "x_size: " << x_size << '\n';
+    cerr << "y_size: " << y_size << '\n';
+
+    SvgPlot plot(output_path, x_size, y_size, 0, x_size, 0, y_size);
     string type = "rect";
     int16_t width = 1;
 
@@ -352,7 +388,9 @@ void wavefront_viz(const std::string& seq1, const std::string& seq2,
 
 //    std::vector<std::vector<int>> matrix(seq1.size() + 1, std::vector<int32_t>(seq2.size() + 1, -1));
 
-    for (int s = 0; s < wfs.size(); ++s) {
+    vector <vector <bool> > is_filled(x_size, vector<bool>(y_size, false));
+
+    for (int s = wfs.size() - 1; s >= 0; s -= score_interval) {
         auto color = viridis.get_svg_color(double(s)/double(wfs.size()));
 
         const auto& wf = wfs[s];
@@ -364,42 +402,71 @@ void wavefront_viz(const std::string& seq1, const std::string& seq2,
             }
             int i = (a + d) / 2;
             int j = (a - d) / 2;
-            while (i >= 0 && j >= 0 && i < seq1.size() && j < seq2.size() && seq1[i] == seq2[j]
-                   && a != wf.I[k] && a != wf.D[k]) {
+            while (i >= 0 && j >= 0 && i < seq1.size() && j < seq2.size() && seq1[i] == seq2[j] && a != wf.I[k] && a != wf.D[k]) {
 //                matrix[i + 1][j + 1] = s;
-                array<int32_t,2> coord = {i+1,j+1};
-                plot.add_point(i+1, j+1, type, width, color);
+
+                size_t x = round(x_size*(double(i+1)/seq1.size()));
+                size_t y = round(y_size*(double(j+1)/seq2.size()));
+
+                if (x < x_size and y < y_size){
+                    if (not is_filled[x][y]) {
+                        plot.add_point(x, y, type, width, color);
+                        is_filled[x][y] = true;
+                    }
+                }
 
                 --i;
                 --j;
                 a -= 2;
             }
 //            matrix[i + 1][j + 1] = s;
-            plot.add_point(i+1, j+1, type, width, color);
+
+            size_t x = round(x_size*(double(i+1)/seq1.size()));
+            size_t y = round(y_size*(double(j+1)/seq2.size()));
+
+            if (x < x_size and y < y_size){
+                if (not is_filled[x][y]) {
+                    plot.add_point(x, y, type, width, color);
+                    is_filled[x][y] = true;
+                }
+            }
         }
     }
+}
 
-//    std::cerr << "\t";
-//    for (auto c : seq2) {
-//        std::cerr << "\t" << c;
-//    }
-//    std::cerr << std::endl;
-
-//    for (int i = 0; i < seq1.size() + 1; ++i) {
-//        if (i != 0) {
-//            std::cerr << seq1[i - 1];
-//        }
-//        for (int j = 0; j < seq2.size() + 1; ++j) {
-//            std::cerr << '\t';
-//            if (matrix[i][j] >= 0) {
-//                std::cerr << matrix[i][j];
-//            }
-//            else {
-//                std::cerr << '.';
-//            }
-//        }
-//        std::cerr << std::endl;
-//    }
+int score_cigar(const std::string& seq1, const std::string& seq2,
+                const std::vector<CIGAROp>& cigar, const WFScores& scores) {
+    int s = 0;
+    int i = 0;
+    int j = 0;
+    for (auto c : cigar) {
+        switch (c.op) {
+            case 'I':
+                i += c.len;
+                s += scores.gap_open + c.len * scores.gap_extend;
+                break;
+            case 'D':
+                j += c.len;
+                s += scores.gap_open + c.len * scores.gap_extend;
+                break;
+            case 'M':
+            {
+                for (int k = 0; k < c.len; ++k, ++i, ++j) {
+                    if (seq1[i] != seq2[j]) {
+                        s += scores.mismatch;
+                    }
+                }
+            }            default:
+                break;
+        }
+    }
+    if (not (cigar.empty() || i == seq1.size())){
+        throw runtime_error("ERROR: assertion failed: cigar.empty() || i == seq1.size()");
+    }
+    if (not (cigar.empty() || j == seq2.size())){
+        throw runtime_error("ERROR: assertion failed: cigar.empty() || j == seq2.size()");
+    }
+    return s;
 }
 
 std::vector<CIGAROp> wavefront_align(const std::string& seq1, const std::string& seq2,
