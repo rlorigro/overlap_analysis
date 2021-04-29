@@ -25,6 +25,7 @@ using namespace boost::accumulators;
 #include <string>
 #include <vector>
 #include <array>
+#include <cmath>
 #include <map>
 
 using std::experimental::filesystem::create_directories;
@@ -94,16 +95,16 @@ int64_t find_matches(string& ref_sequence,
         }
     });
 
-    string rc_query_sequence;
-    reverse_complement(query_sequence, rc_query_sequence);
-
-    matcher.findMEM_each(rc_query_sequence, min_length, false, [&](const mummer::mummer::match_t& match){
-        matches.emplace_back(match);
-
-        for (int64_t m=0; m<match.len; m+=50) {
-            accumulator(match.ref);
-        }
-    });
+//    string rc_query_sequence;
+//    reverse_complement(query_sequence, rc_query_sequence);
+//
+//    matcher.findMEM_each(rc_query_sequence, min_length, false, [&](const mummer::mummer::match_t& match){
+//        matches.emplace_back(match);
+//
+//        for (int64_t m=0; m<match.len; m+=50) {
+//            accumulator(match.ref);
+//        }
+//    });
 
     return mean(accumulator);
 }
@@ -169,14 +170,26 @@ void plot_matches_as_heatmap(
     int64_t x_offset = 0;
     int64_t y_offset = 0;
 
+    int64_t query_size_sum = 0;
+    for (const auto& item: query_sizes){
+        query_size_sum += item.second;
+    }
+
+    int64_t total_size = std::max(query_size_sum, int64_t(ref_size));
+
+    if (total_size > int64_t(ref_size)) {
+        cerr << "WARNING: rescaling because sum of query sizes (" << total_size
+             << ") is greater than ref size (" << ref_size << ")" << '\n';
+    }
+
     for (const auto& item: matches){
         for (auto& match: item.second){
             for (int64_t m=0; m<match.len; m+=50) {
                 auto x = match.ref + m + x_offset;
                 auto y = match.query + m + y_offset;
 
-                size_t x_bin = (double(x)/double(ref_size))*double(size);
-                size_t y_bin = (double(y)/double(ref_size))*double(size);
+                size_t x_bin = (double(x)/double(total_size))*double(size);
+                size_t y_bin = (double(y)/double(total_size))*double(size);
 
                 if (size_t(match.len) > matrix[x_bin][y_bin]){
                     matrix[x_bin][y_bin] = match.len;
@@ -296,7 +309,8 @@ template <class T, class T2> void fasta_or_fastq_dotplot(
 //
 //        plot_matches(all_matches, all_names, ref_sequences[i].size(), sum_of_query_sizes, plot_path);
 
-        string name = "all_VS_" + ref_names[i] + "_dotplot.ppm";
+        auto query_prefix = query_reader.file_path.stem();
+        string name = query_prefix.string() + "_VS_" + ref_names[i] + "_dotplot.ppm";
         path plot_path = output_directory / name;
 
         cerr << "Plotting..." << '\n';
