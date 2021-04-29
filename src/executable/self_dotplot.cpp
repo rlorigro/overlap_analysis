@@ -75,7 +75,7 @@ void dotplot(path fastq_path, path output_directory){
 
     FastqIterator fastq_iterator(fastq_path);
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         reverse_complement(element.sequence, rc_sequence);
 
         generate_dotplot(element.name, element.sequence, rc_sequence, min_length, output_directory);
