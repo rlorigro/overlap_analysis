@@ -17,13 +17,25 @@ class ColorMap {
 };
 
 
-class MplJet: public ColorMap {
+class MplRainbow: public ColorMap {
 public:
     /// Attributes ///
     static const vector <array <double,3> > rgbs;
 
     /// Methods ///
-    MplJet()=default;
+    MplRainbow()=default;
+    array<double,3> get_rgb(double x);
+    string get_svg_color(double x);
+};
+
+
+class MplGnuplot: public ColorMap {
+public:
+    /// Attributes ///
+    static const vector <array <double,3> > rgbs;
+
+    /// Methods ///
+    MplGnuplot()=default;
     array<double,3> get_rgb(double x);
     string get_svg_color(double x);
 };
