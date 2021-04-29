@@ -73,19 +73,19 @@ void align(const FastqElement& s, const FastqElement& s2, path output_directory)
     vector <pair <coord_t, size_t> > matches;
 
     // Search suffix array for exact matches
-    matcher.findMAM_each(query, 10, false, [&](const match_t& m){
+    matcher.findMEM_each(query, 10, false, [&](const match_t& m){
         matches.emplace_back(make_pair(make_pair(m.ref, m.query), m.len));
     });
 
-    Dag dag(matches, ref.size(), query.size(), 200);
+    Dag dag(matches, ref.size(), query.size(), 100);
 
     // Set up plot
-    path plot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
+//    path plot_path = output_directory / (s.name + "_vs_" + s2.name + ".svg");
 //    dag.write_to_svg(plot_path);
 
     dag.compute_alignment();
 
-    path plot_path2 = output_directory / (s.name + "_vs_" + s2.name + "_aligned.svg");
+//    path plot_path2 = output_directory / (s.name + "_vs_" + s2.name + "_aligned.svg");
 //    dag.write_to_svg(plot_path2);
 
     cerr << s.name << ' ' << s2.name << ' ' << matches.size() << '\n';
@@ -127,19 +127,25 @@ void test(path fastq_path){
 
     cerr << "Loading sequences..." << '\n';
 
-    while (fastq_iterator.next_fastq_element(element)){
+    while (fastq_iterator.next_element(element)){
         sequences.emplace_back(element);
         cerr << "Read '" << element.name << "' = " << element.sequence.size() << " bp " <<'\n';
     }
 
+    size_t n_trials = 10;
+    size_t total_comparisons = 0;
+
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    auto total_comparisons = align_all_vs_all(sequences);
+    for (size_t i=0; i<n_trials; i++) {
+        total_comparisons += align_all_vs_all(sequences);
+    }
 
     auto t2 = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    cerr << "Alignment completed in: " << elapsed.count() << " milliseconds" << '\n';
     cerr << "Total alignments: " << total_comparisons << '\n';
+    cerr << "Alignment completed in: " << elapsed.count() << " milliseconds" << '\n';
+
 }
 
 

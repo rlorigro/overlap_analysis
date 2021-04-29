@@ -55,6 +55,8 @@ std::vector<CIGAROp> wavefront_align(const std::string& seq1, const std::string&
                                      int32_t prune_diff = -1,
                                      path viz_path = "");
 
+int score_cigar(const std::string& seq1, const std::string& seq2,
+                const std::vector<CIGAROp>& cigar, const WFScores& scores);
 
 
 #endif /* OVERLAP_ANALYSIS_WAVEFRONT_HPP */
