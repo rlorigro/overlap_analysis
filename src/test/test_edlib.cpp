@@ -152,7 +152,7 @@ int main(int argc, char* argv[]){
             ("fastq,i",
              value<path>(&fastq_path)
                      ->required(),
-             "File path of PAF file containing alignments to some reference")
+             "File path of Fastq sequences to be aligned all-vs-all")
             ;
 
     variables_map vm;
