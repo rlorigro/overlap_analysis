@@ -1,3 +1,4 @@
+#include "DiagonalIntervalTree.hpp"
 #include "DiagonalTree.hpp"
 
 #include <chrono>
@@ -16,15 +17,15 @@ using std::runtime_error;
 
 void test(){
     vector <pair <pair <size_t,size_t>, size_t> > matches = {
-            {{0,0}, 1},
-            {{0,1}, 1},
+            {{0,0}, 3},
+            {{0,1}, 2},
             {{2,2}, 1},
             {{2,3}, 1},
             {{3,4}, 1},
             {{4,1}, 1},
     };
 
-    DiagonalTree tree(5,5);
+    DiagonalIntervalTree tree(5,5);
 
     for (const auto& m: matches){
         auto x = m.first.first;
@@ -47,7 +48,7 @@ void test(){
     size_t x_diag = 0;
     for (const auto& t: tree.diagonals){
         for(const auto& item: t){
-            cerr << x_diag << ' ' << item.first << ' ' << item.second << '\n';
+            cerr << x_diag << ' ' << item.lower() << ' ' << item.upper() << '\n';
         }
 
         x_diag++;
@@ -64,7 +65,7 @@ void test(){
 
 
 void time(){
-    DiagonalTree tree(800,80);
+    DiagonalIntervalTree tree(800,80);
 
 
     auto t1 = std::chrono::high_resolution_clock::now();

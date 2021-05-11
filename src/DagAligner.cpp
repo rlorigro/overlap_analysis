@@ -1,3 +1,4 @@
+#include "DiagonalIntervalTree.hpp"
 #include "DiagonalTree.hpp"
 #include "DagAligner.hpp"
 #include "SvgPlot.hpp"

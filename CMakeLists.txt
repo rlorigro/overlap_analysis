@@ -52,6 +52,7 @@ set(SOURCES
         src/Color.cpp
         src/DagAligner.cpp
         src/DiagonalTree.cpp
+        src/DiagonalIntervalTree.cpp
         src/dotplot.cpp
         src/FastaReader.cpp
         src/FastaWriter.cpp
@@ -64,6 +65,7 @@ set(SOURCES
         src/Plot.cpp
         src/SvgPlot.cpp
         src/SequenceElement.cpp
+        src/SweepLineSolver.cpp
         src/wavefront.cpp
         )
 
@@ -248,15 +250,17 @@ set(TESTS
         test_boost_rtree
         test_chaining
         test_dag
+        test_diagonal_interval_tree
         test_diagonal_tree
+        test_edlib_runtime
         test_edlib
         test_ogdf
         test_gnuplot
         test_kernel
         test_mummer
         test_mummer_runtime
-        test_edlib_runtime
         test_svgplot
+        test_sweepline
         test_wf
         )
 
