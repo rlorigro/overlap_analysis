@@ -21,13 +21,14 @@ void test(){
     vector <DiagonalMatch> matches = {
             {0,0,2,y_size},
             {2,1,2,y_size},
+            {2,3,1,y_size},
             {3,3,2,y_size},
-            {3,0,2,y_size},
+            {0,3,2,y_size},
             {5,8,1,y_size},
     };
 
     for (const auto& item: matches){
-        cerr << item.get_x(y_size) << " " << item.get_y(y_size) << '\n';
+        cerr << "x=" << item.get_x(y_size) << " y=" << item.get_y(y_size) << " diag=" << item.diagonal << " antidiag=" << item.antidiagonal << '\n';
     }
 
     SweepLineSolver solver(matches);
