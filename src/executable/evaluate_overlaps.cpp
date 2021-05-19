@@ -6,7 +6,7 @@ using overlap_analysis::DoubleStrandedGraph;
 using overlap_analysis::load_paf_as_graph;
 using overlap_analysis::load_adjacency_csv_as_graph;
 using overlap_analysis::RegionalOverlapMap;
-using overlap_analysis::GraphDiff;
+using overlap_analysis::EdgeDiff;
 
 #include <iostream>
 #include <string>
@@ -82,7 +82,9 @@ void evaluate_overlaps(
         uint32_t min_quality,
         path excluded_reads_path,
         uint16_t label_type,
-        bool plot){
+        bool plot,
+        bool disable_node_union
+        ){
 
     if (exists(output_directory)){
         throw runtime_error("ERROR: output directory already exists");
@@ -97,6 +99,12 @@ void evaluate_overlaps(
     construct_graph(path_a, graph_a, min_quality);
     construct_graph(path_b, graph_b, min_quality);
 
+    // By default, remove all nodes that arent shared by both graphs
+    if (not disable_node_union){
+        graph_a.node_union(graph_b);
+        graph_b.node_union(graph_a);
+    }
+
     if (not excluded_reads_path.empty()){
         exclude_reads_from_graph(graph_a, excluded_reads_path, output_directory/"a_excluded_reads.txt");
         exclude_reads_from_graph(graph_b, excluded_reads_path, output_directory/"b_excluded_reads.txt");
@@ -108,7 +116,7 @@ void evaluate_overlaps(
     }
 
     cerr << "Evaluating edge differences..." << '\n';
-    GraphDiff diff(graph_a, graph_b, output_directory);
+    EdgeDiff diff(graph_a, graph_b, output_directory);
 
     ofstream out_file(output_directory / "diff.txt");
     out_file << diff;
@@ -126,6 +134,7 @@ int main(int argc, char* argv[]){
     string subgraph_node_name;
     uint32_t subgraph_radius;
     bool plot;
+    bool disable_node_union;
 
     options_description options("Arguments:");
 
@@ -173,6 +182,12 @@ int main(int argc, char* argv[]){
              default_value(false),
              "Whether to render the graph as SVG or not. \n"
              "Strongly discouraged for graphs with more than a few thousand nodes")
+
+            ("disable_node_union",
+             bool_switch(&disable_node_union)->
+             default_value(false),
+             "Whether to allow nodes that aren't in both graphs. \n"
+             "If this option is specified, all nodes that aren't shared in a and b graph will NOT be deleted")
             ;
 
     variables_map vm;
@@ -192,7 +207,8 @@ int main(int argc, char* argv[]){
             min_quality,
             excluded_reads_path,
             label_type,
-            plot);
+            plot,
+            disable_node_union);
 
     return 0;
 }

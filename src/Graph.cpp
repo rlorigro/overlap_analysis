@@ -124,6 +124,32 @@ bool DoubleStrandedGraph::has_edge(const string& a, const string& b) const{
 }
 
 
+bool DoubleStrandedGraph::has_node(const string& name) const{
+    bool result = false;
+
+    auto iter = id_vs_name.right.find(name);
+
+    if (iter != id_vs_name.right.end()){
+        result = true;
+    }
+
+    return result;
+}
+
+
+bool Graph::has_node(const string& name) const{
+    bool result = false;
+
+    auto iter = id_vs_name.right.find(name);
+
+    if (iter != id_vs_name.right.end()){
+        result = true;
+    }
+
+    return result;
+}
+
+
 bool DoubleStrandedGraph::has_edge(const string& a, bool a_reversal, const string& b, bool b_reversal) const{
     bool result = true;
 
@@ -324,6 +350,27 @@ void DoubleStrandedGraph::get_all_read_names(set<string>& read_names){
         auto label = id_vs_name.left.at(single_stranded_id);
 
         read_names.emplace(label);
+    }
+}
+
+
+void DoubleStrandedGraph::node_union(const UndirectedGraph& other_graph){
+    for (size_t id=0; id<nodes.size(); id++){
+        auto single_stranded_id = id;
+
+        // Undo the even/odd encoding scheme to reduce multiple node ids to a single mapping id->name
+        single_stranded_id = (id - (id % 2)) / 2;
+
+        if (nodes[id] == nullptr){
+            continue;
+        }
+
+        auto label = id_vs_name.left.at(single_stranded_id);
+
+        if (not other_graph.has_node(label)){
+            graph.delNode(nodes[id]);
+            nodes[id] = nullptr;
+        }
     }
 }
 
@@ -689,7 +736,7 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
 /// Dumb brute force search to compare edges in 2 graphs
 /// A better method might be a joint BFS
-GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory):
+EdgeDiff::EdgeDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory):
         graph_a(a),
         graph_b(b)
 {
@@ -740,7 +787,7 @@ GraphDiff::GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b,
 }
 
 
-ostream& operator<<(ostream& o, GraphDiff& g){
+ostream& operator<<(ostream& o, EdgeDiff& g){
     o << "a_edges," << g.a_only_edges.size() << '\n';
     o << "b_edges," << g.b_only_edges.size() << '\n';
     o << "a_and_b_edges," << g.b_both_edges.size() << '\n';

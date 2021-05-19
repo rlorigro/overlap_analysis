@@ -78,7 +78,8 @@ public:
 
     /// Methods ///
     virtual void assign_graph_node_labels(path output_path)=0;
-    virtual bool has_edge(const string& a, const string& b) const=0;
+    virtual bool has_edge(const string& a, const string& b) const = 0;
+    virtual bool has_node(const string& name) const = 0;
 
     void assign_default_graph_rendering_attributes();
     void write_graph_to_svg(path output_path);
@@ -96,6 +97,8 @@ public:
     Graph()=default;
     void get_all_read_names(set<string>& read_names);
     void assign_graph_node_labels(path output_path="");
+
+    bool has_node(const string& name) const;
 
     bool has_edge(const string& a, const string& b) const;
 
@@ -122,16 +125,20 @@ public:
     void get_all_read_names(set<string>& read_names);
     void assign_graph_node_labels(path output_path="");
 
+    bool has_node(const string& name) const;
+
     bool has_edge(const string& a, const string& b) const;
     bool has_edge(const string& a, bool a_reversal, const string& b, bool b_reversal) const;
 
     bool is_reverse(uint32_t id) const;
 
+    void node_union(const UndirectedGraph& other_graph);
+
     void create_subgraph(const string& start_name, uint32_t radius, Graph& subgraph);
 };
 
 
-class GraphDiff{
+class EdgeDiff{
 public:
     /// Attributes ///
     const DoubleStrandedGraph& graph_a;
@@ -142,11 +149,11 @@ public:
     set <edge> b_both_edges;
 
     /// Methods ///
-    GraphDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
+    EdgeDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
 };
 
 
-ostream& operator<<(ostream& o, GraphDiff& g);
+ostream& operator<<(ostream& o, EdgeDiff& g);
 
 
 void create_graph_edges_from_overlap_map(
