@@ -104,14 +104,14 @@ void print_subchains(
         const set<pair<size_t, size_t> >& subchain_bounds,
         const string& read_name) {
 
-    cerr << "Subchains created for read " << read_name << '\n';
+    cout << "Subchains created for read " << read_name << '\n';
 
     for (auto& item: subchain_bounds) {
         for (size_t i = item.first; i < item.second; i++) {
-            cerr << '\t' << chain.chain[i] << '\n';
+            cout << '\t' << chain.chain[i] << '\n';
         }
 
-        cerr << '\n';
+        cout << '\n';
     }
 }
 
