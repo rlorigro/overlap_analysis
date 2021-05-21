@@ -196,26 +196,29 @@ bool Graph::has_edge(const string& a, const string& b) const{
 
 void DoubleStrandedGraph::add_edge(uint32_t a, uint32_t b){
     // Don't duplicate edges
+
+    uint32_t flipped_id;
+    uint32_t flipped_other_id;
+
+    if (a % 2 == 0){
+        flipped_id = a + 1;
+    }
+    else{
+        flipped_id = a - 1;
+    }
+
+    if (b % 2 == 0){
+        flipped_other_id = b + 1;
+    }
+    else{
+        flipped_other_id = b - 1;
+    }
+
     if (graph.searchEdge(nodes[a], nodes[b]) == nullptr){
-
-        uint32_t flipped_id;
-        uint32_t flipped_other_id;
-
-        if (a % 2 == 0){
-            flipped_id = a + 1;
-        }
-        else{
-            flipped_id = a - 1;
-        }
-
-        if (b % 2 == 0){
-            flipped_other_id = b + 1;
-        }
-        else{
-            flipped_other_id = b - 1;
-        }
-
         graph.newEdge(nodes[a], nodes[b]);
+    }
+
+    if (graph.searchEdge(nodes[flipped_id], nodes[flipped_other_id]) == nullptr){
         graph.newEdge(nodes[flipped_id], nodes[flipped_other_id]);
     }
 }
