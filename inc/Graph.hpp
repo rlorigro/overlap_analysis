@@ -28,11 +28,14 @@ using ogdf::Shape;
 
 #include <experimental/filesystem>
 #include <unordered_map>
+#include <functional>
 #include <iostream>
 #include <utility>
 #include <string>
 #include <vector>
 #include <queue>
+#include <array>
+#include <map>
 
 using std::experimental::filesystem::create_directories;
 using std::experimental::filesystem::absolute;
@@ -40,6 +43,7 @@ using std::experimental::filesystem::exists;
 using std::experimental::filesystem::path;
 using std::runtime_error;
 using std::unordered_map;
+using std::function;
 using std::ifstream;
 using std::ofstream;
 using std::to_string;
@@ -49,6 +53,8 @@ using std::queue;
 using std::pair;
 using std::cerr;
 using std::cout;
+using std::array;
+using std::map;
 
 typedef bimap<uint32_t,string> uint32_string_bimap;
 typedef uint32_string_bimap::value_type bimap_pair;
@@ -64,6 +70,22 @@ public:
 
     BfsQueueElement()=default;
     BfsQueueElement(node original_node, node subgraph_node);
+};
+
+
+class ShastaLabel {
+public:
+    bool passes_readgraph2_criteria;
+    bool in_read_graph;
+
+    ShastaLabel()=default;
+    ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph);
+};
+
+
+template <class T> class EdgeLabels {
+public:
+    vector <array <map <size_t, T>, 2> > data;
 };
 
 
@@ -109,6 +131,7 @@ public:
 
 class DoubleStrandedGraph: public UndirectedGraph {
 public:
+    EdgeLabels <ShastaLabel> edge_labels;
 
     /// Methods ///
     DoubleStrandedGraph()=default;
@@ -135,21 +158,27 @@ public:
     void node_union(const UndirectedGraph& other_graph);
 
     void create_subgraph(const string& start_name, uint32_t radius, Graph& subgraph);
-};
+
+    template <class T> void insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
+    template <class T> bool find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
+}
 
 
 class EdgeDiff{
 public:
     /// Attributes ///
-    const DoubleStrandedGraph& graph_a;
-    const DoubleStrandedGraph& graph_b;
     set <edge> a_only_edges;
     set <edge> b_only_edges;
     set <edge> a_both_edges;
     set <edge> b_both_edges;
 
     /// Methods ///
-    EdgeDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
+    EdgeDiff()=default;
+    void agnostic_diff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
+    void for_each_edge_comparison(
+            const DoubleStrandedGraph& ref_graph,
+            const DoubleStrandedGraph& graph,
+            const function<void(uint32_t id0, uint32_t id1, bool is_cross_strand, bool in_ref, bool in_non_ref)>& f);
 };
 
 
@@ -169,6 +198,37 @@ void load_paf_as_graph(
 
 
 void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph);
+
+
+template <class T> void DoubleStrandedGraph::insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    edge_labels.data[is_cross_strand][id0][id1] = label;
+}
+
+
+template <class T> bool DoubleStrandedGraph::find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    if (id0 >= edge_labels.data.size() or id1 >= edge_labels.data.size()){
+        cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
+        return false;
+    }
+
+    bool success = false;
+
+    // Edges are bidirectional, but only one label is stored, so both directions must be searched
+    auto iter0 = edge_labels.data[id0][is_cross_strand].find(id1);
+    if (iter0 != edge_labels.data[id0][is_cross_strand].end()){
+        label = iter0->second;
+        success = true;
+    }
+    else{
+        auto iter1 = edge_labels.data[id1][is_cross_strand].find(id0);
+        if (iter1 != edge_labels.data[id1][is_cross_strand].end()){
+            label = iter1->second;
+            success = true;
+        }
+    }
+
+    return success;
+}
 
 
 }

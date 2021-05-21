@@ -4,11 +4,15 @@
 
 namespace overlap_analysis{
 
+ShastaLabel::ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph):
+    passes_readgraph2_criteria(passes_readgraph2_criteria),
+    in_read_graph(in_read_graph)
+{}
 
 BfsQueueElement::BfsQueueElement(node original_node, node subgraph_node):
-        original_node(original_node),
-        subgraph_node(subgraph_node)
-{};
+    original_node(original_node),
+    subgraph_node(subgraph_node)
+{}
 
 
 bool DoubleStrandedGraph::remove_node(const string& name){
@@ -681,6 +685,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
     string name_a;
     string name_b;
     bool is_cross_strand;
+    bool passes_readgraph2_criteria;
+    bool in_readgraph;
 
     char c;
 
@@ -695,6 +701,14 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
             else if (n_delimiters == 2){
                 // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
                 is_cross_strand = (token == "No");
+            }
+            else if (n_delimiters == 3){
+                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
+                passes_readgraph2_criteria = (token == "Yes");
+            }
+            else if (n_delimiters == 4){
+                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
+                in_readgraph = (token == "Yes");
             }
 
             token.resize(0);
@@ -724,6 +738,10 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                     graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
                     graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
                 }
+
+                if (n_delimiters > 2){
+
+                }
             }
 
             token.resize(0);
@@ -739,10 +757,7 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
 /// Dumb brute force search to compare edges in 2 graphs
 /// A better method might be a joint BFS
-EdgeDiff::EdgeDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory):
-        graph_a(a),
-        graph_b(b)
-{
+void EdgeDiff::agnostic_diff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory){
     ofstream file_a(output_directory / "a_only_edges.csv");
     ofstream file_b(output_directory / "b_only_edges.csv");
 
@@ -785,6 +800,56 @@ EdgeDiff::EdgeDiff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, p
         else{
             file_b << name0 << ',' << name1 << ',' << (reversal0 == reversal1) <<'\n';
             b_only_edges.insert(edge);
+        }
+    }
+}
+
+
+/// Dumb brute force search to compare edges in 2 graphs
+/// A better method might be a joint BFS
+void EdgeDiff::for_each_edge_comparison(
+        const DoubleStrandedGraph& ref_graph,
+        const DoubleStrandedGraph& graph,
+        const function<void(uint32_t id0, uint32_t id1, bool is_cross_strand, bool in_ref, bool in_non_ref)>& f
+){
+    for (auto edge: ref_graph.graph.edges){
+        auto nodes = edge->nodes();
+
+        bool reversal0 = ref_graph.is_reverse(nodes[0]->index());
+        bool reversal1 = ref_graph.is_reverse(nodes[1]->index());
+
+        auto id0 = ref_graph.get_single_stranded_id(nodes[0]->index());
+        auto id1 = ref_graph.get_single_stranded_id(nodes[1]->index());
+
+        const auto& name0 = ref_graph.id_vs_name.left.at(id0);
+        const auto& name1 = ref_graph.id_vs_name.left.at(id1);
+
+        bool is_cross_strand = (reversal0 != reversal1);
+        bool in_ref = true;
+        bool in_non_ref = graph.has_edge(name0, reversal0, name1, reversal1);
+
+        f(id0, id1, is_cross_strand, in_ref, in_non_ref);
+    }
+
+    for (auto edge: graph.graph.edges){
+        auto nodes = edge->nodes();
+
+        bool reversal0 = graph.is_reverse(nodes[0]->index());
+        bool reversal1 = graph.is_reverse(nodes[1]->index());
+
+        auto id0 = graph.get_single_stranded_id(nodes[0]->index());
+        auto id1 = graph.get_single_stranded_id(nodes[1]->index());
+
+        const auto& name0 = graph.id_vs_name.left.at(id0);
+        const auto& name1 = graph.id_vs_name.left.at(id1);
+
+        bool is_cross_strand = (reversal0 != reversal1);
+        bool in_ref = graph.has_edge(name0, reversal0, name1, reversal1);
+        bool in_non_ref = true;
+
+        // All the mutual edges have been iterated already, don't use them again
+        if (not in_ref){
+            f(id0, id1, is_cross_strand, in_ref, in_non_ref);
         }
     }
 }

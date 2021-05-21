@@ -6,6 +6,7 @@ using overlap_analysis::DoubleStrandedGraph;
 using overlap_analysis::load_paf_as_graph;
 using overlap_analysis::load_adjacency_csv_as_graph;
 using overlap_analysis::RegionalOverlapMap;
+using overlap_analysis::ShastaLabel;
 using overlap_analysis::EdgeDiff;
 
 #include <iostream>
@@ -76,8 +77,8 @@ void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_qu
 
 
 void evaluate_overlaps(
-        path path_a,
-        path path_b,
+        path ref_overlap_path,
+        path overlap_path,
         path output_directory,
         uint32_t min_quality,
         path excluded_reads_path,
@@ -93,46 +94,71 @@ void evaluate_overlaps(
         create_directories(output_directory);
     }
 
-    DoubleStrandedGraph graph_a;
-    DoubleStrandedGraph graph_b;
+    DoubleStrandedGraph ref_graph;
+    DoubleStrandedGraph graph;
 
-    construct_graph(path_a, graph_a, min_quality);
-    construct_graph(path_b, graph_b, min_quality);
+    construct_graph(ref_overlap_path, ref_graph, min_quality);
+    construct_graph(overlap_path, graph, min_quality);
 
     // By default, remove all nodes that arent shared by both graphs
     if (not disable_node_union){
-        graph_a.node_union(graph_b);
-        graph_b.node_union(graph_a);
+        ref_graph.node_union(graph);
+        graph.node_union(ref_graph);
     }
 
     if (not excluded_reads_path.empty()){
-        exclude_reads_from_graph(graph_a, excluded_reads_path, output_directory/"a_excluded_reads.txt");
-        exclude_reads_from_graph(graph_b, excluded_reads_path, output_directory/"b_excluded_reads.txt");
+        exclude_reads_from_graph(ref_graph, excluded_reads_path, output_directory / "excluded_ref_overlaps.txt");
+        exclude_reads_from_graph(graph, excluded_reads_path, output_directory / "excluded_overlaps.txt");
     }
 
     if (plot) {
-        render_graph(graph_a, label_type, output_directory, "a");
-        render_graph(graph_b, label_type, output_directory, "b");
+        render_graph(ref_graph, label_type, output_directory, "ref_overlap_graph");
+        render_graph(graph, label_type, output_directory, "overlap_graph");
     }
 
     cerr << "Evaluating edge differences..." << '\n';
-    EdgeDiff diff(graph_a, graph_b, output_directory);
+    EdgeDiff diff;
 
-    ofstream out_file(output_directory / "diff.txt");
-    out_file << diff;
+    path edge_table_filename = output_directory / "labeled_overlaps.csv";
+    ofstream edge_table_file(edge_table_filename);
+    if (not edge_table_file.is_open() or not edge_table_file.good()){
+        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
+    }
+
+    diff.for_each_edge_comparison(
+            ref_graph,
+            graph,
+            [&](uint32_t id0,
+                uint32_t id1,
+                bool is_cross_strand,
+                bool in_ref,
+                bool in_non_ref){
+
+        ShastaLabel label;
+        auto success = graph.find_label(id0, id1, is_cross_strand, label);
+
+        // TODO add names to the parameter list and consider using a class to transfer data...
+        // id is insufficient for writing the output table
+        if (success){
+            edge_table_file << "stuff" << '\n';
+        }
+    });
+
+    ofstream summary_file(output_directory / "summary.txt");
+    if (not summary_file.is_open() or not summary_file.good()){
+        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
+    }
+    summary_file << diff;
 }
 
 
 int main(int argc, char* argv[]){
-    path path_a;
-    path path_b;
+    path ref_overlap_path;
+    path overlap_path;
     path output_directory;
     path excluded_reads_path;
     uint32_t min_quality;
     uint16_t label_type;
-    string subgraph_argument;
-    string subgraph_node_name;
-    uint32_t subgraph_radius;
     bool plot;
     bool disable_node_union;
 
@@ -140,14 +166,14 @@ int main(int argc, char* argv[]){
 
     options.add_options()
             ("a",
-             value<path>(&path_a)
+             value<path>(&ref_overlap_path)
              ->required(),
              "File path of file from which overlap can be inferred\n:"
              "\tPAF file containing alignments to some reference\n "
              "\tCSV file containing a list of reads pairs, with an indication for whether the overlap is cross-strand\n")
 
             ("b",
-             value<path>(&path_b)
+             value<path>(&overlap_path)
              ->required(),
              "File path of file from which overlap can be inferred:\n"
              "\tPAF file containing alignments to some reference \n"
@@ -201,8 +227,8 @@ int main(int argc, char* argv[]){
     notify(vm);
 
     evaluate_overlaps(
-            path_a,
-            path_b,
+            ref_overlap_path,
+            overlap_path,
             output_directory,
             min_quality,
             excluded_reads_path,
