@@ -137,7 +137,7 @@ public:
     DoubleStrandedGraph()=default;
 
     uint32_t add_node(const string& read_name);
-    void add_edge(uint32_t a, uint32_t b);
+    void add_edge(uint32_t a, uint32_t b, bool allow_duplicates=true);
     bool remove_node(const string& name);
 
     uint32_t get_forward_id(uint32_t id) const;
@@ -161,7 +161,28 @@ public:
 
     template <class T> void insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
     template <class T> bool find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
-}
+};
+
+
+class EdgeDescriptor {
+public:
+    const string& name0;
+    const string& name1;
+    const uint32_t id0;
+    const uint32_t id1;
+    const bool is_cross_strand;
+    const bool in_ref;
+    const bool in_non_ref;
+
+    EdgeDescriptor(
+        const string& name0,
+        const string& name1,
+        const uint32_t id0,
+        const uint32_t id1,
+        const bool is_cross_strand,
+        const bool in_ref,
+        const bool in_non_ref);
+};
 
 
 class EdgeDiff{
@@ -178,7 +199,7 @@ public:
     void for_each_edge_comparison(
             const DoubleStrandedGraph& ref_graph,
             const DoubleStrandedGraph& graph,
-            const function<void(uint32_t id0, uint32_t id1, bool is_cross_strand, bool in_ref, bool in_non_ref)>& f);
+            const function<void(EdgeDescriptor& e)>& f);
 };
 
 
@@ -201,7 +222,10 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
 
 template <class T> void DoubleStrandedGraph::insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    edge_labels.data[is_cross_strand][id0][id1] = label;
+    if (id0 >= edge_labels.data.size()){
+        edge_labels.data.resize(id0+1);
+    }
+    edge_labels.data[id0][is_cross_strand].emplace(id1,label);
 }
 
 

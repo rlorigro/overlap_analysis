@@ -1,6 +1,8 @@
 #include "OverlapMap.hpp"
 #include "Graph.hpp"
+#include "ogdf/basic/simple_graph_alg.h"
 
+using ogdf::makeParallelFree;
 
 namespace overlap_analysis{
 
@@ -198,7 +200,7 @@ bool Graph::has_edge(const string& a, const string& b) const{
 }
 
 
-void DoubleStrandedGraph::add_edge(uint32_t a, uint32_t b){
+void DoubleStrandedGraph::add_edge(uint32_t a, uint32_t b, bool allow_duplicates){
     // Don't duplicate edges
 
     uint32_t flipped_id;
@@ -218,12 +220,18 @@ void DoubleStrandedGraph::add_edge(uint32_t a, uint32_t b){
         flipped_other_id = b - 1;
     }
 
-    if (graph.searchEdge(nodes[a], nodes[b]) == nullptr){
+    if (allow_duplicates) {
         graph.newEdge(nodes[a], nodes[b]);
-    }
-
-    if (graph.searchEdge(nodes[flipped_id], nodes[flipped_other_id]) == nullptr){
         graph.newEdge(nodes[flipped_id], nodes[flipped_other_id]);
+    }
+    else{
+        if (graph.searchEdge(nodes[a], nodes[b]) == nullptr){
+            graph.newEdge(nodes[a], nodes[b]);
+        }
+
+        if (graph.searchEdge(nodes[flipped_id], nodes[flipped_other_id]) == nullptr){
+            graph.newEdge(nodes[flipped_id], nodes[flipped_other_id]);
+        }
     }
 }
 
@@ -547,33 +555,25 @@ void create_graph_edges_from_overlap_map(
         auto& prev_read_set = empty_set;
 
         for (auto i = begin(overlaps), e = end(overlaps); i!=e; ++i){
-//            const auto& interval = i->first;
             auto& read_set = i->second;
-
-//            cerr << interval << " -> ";
-//            for (const auto& id: read_set){
-//                cerr << id << " " ;
-//            }
-//            cerr << '\n';
 
             for (const auto& id: read_set){
                 // If this read id is not in the previous set, it indicates that more edges need to be built
                 if (prev_read_set.count(id) == 0){
                     for (const auto& other_id: read_set){
                         if (other_id != id){
-                            // Will create the edge if it doesn't exist already
                             graph.add_edge(id, other_id);
                         }
                     }
                 }
             }
-//            cerr << '\n';
 
             prev_read_set = read_set;
         }
     }
-//    cerr << '\n';
 
+    // Remove any duplicated edges
+    makeParallelFree(graph.graph);
 }
 
 
@@ -593,6 +593,7 @@ void load_paf_as_graph(
         DoubleStrandedGraph& graph,
         uint32_t min_quality) {
 
+    cerr << "\tParsing PAF as interval map..." << '\n';
     ifstream paf_file(paf_path);
 
     if (not paf_file.good()) {
@@ -668,6 +669,7 @@ void load_paf_as_graph(
         }
     }
 
+    cerr << "\tConstructing graph from interval map..." << '\n';
     create_graph_edges_from_overlap_map(overlap_map, graph);
 }
 
@@ -685,8 +687,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
     string name_a;
     string name_b;
     bool is_cross_strand;
-    bool passes_readgraph2_criteria;
-    bool in_readgraph;
+    bool passes_readgraph2_criteria = false;
+    bool in_readgraph = false;
 
     char c;
 
@@ -703,11 +705,11 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                 is_cross_strand = (token == "No");
             }
             else if (n_delimiters == 3){
-                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
+                // Depending on the format there may be more data after this token
                 passes_readgraph2_criteria = (token == "Yes");
             }
             else if (n_delimiters == 4){
-                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
+                // Depending on the format there may be more data after this token
                 in_readgraph = (token == "Yes");
             }
 
@@ -739,9 +741,8 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
                     graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
                 }
 
-                if (n_delimiters > 2){
-
-                }
+                ShastaLabel l(passes_readgraph2_criteria, in_readgraph);
+                graph.insert_label(id_a, id_b, is_cross_strand, l);
             }
 
             token.resize(0);
@@ -753,6 +754,24 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
         }
     }
 }
+
+
+EdgeDescriptor::EdgeDescriptor(
+        const string& name0,
+        const string& name1,
+        const uint32_t id0,
+        const uint32_t id1,
+        const bool is_cross_strand,
+        const bool in_ref,
+        const bool in_non_ref):
+    name0(name0),
+    name1(name1),
+    id0(id0),
+    id1(id1),
+    is_cross_strand(is_cross_strand),
+    in_ref(in_ref),
+    in_non_ref(in_non_ref)
+{}
 
 
 /// Dumb brute force search to compare edges in 2 graphs
@@ -810,7 +829,7 @@ void EdgeDiff::agnostic_diff(const DoubleStrandedGraph& a, const DoubleStrandedG
 void EdgeDiff::for_each_edge_comparison(
         const DoubleStrandedGraph& ref_graph,
         const DoubleStrandedGraph& graph,
-        const function<void(uint32_t id0, uint32_t id1, bool is_cross_strand, bool in_ref, bool in_non_ref)>& f
+        const function<void(EdgeDescriptor& e)>& f
 ){
     for (auto edge: ref_graph.graph.edges){
         auto nodes = edge->nodes();
@@ -828,7 +847,16 @@ void EdgeDiff::for_each_edge_comparison(
         bool in_ref = true;
         bool in_non_ref = graph.has_edge(name0, reversal0, name1, reversal1);
 
-        f(id0, id1, is_cross_strand, in_ref, in_non_ref);
+        EdgeDescriptor e(
+            name0,
+            name1,
+            id0,
+            id1,
+            is_cross_strand,
+            in_ref,
+            in_non_ref);
+
+        f(e);
     }
 
     for (auto edge: graph.graph.edges){
@@ -844,12 +872,21 @@ void EdgeDiff::for_each_edge_comparison(
         const auto& name1 = graph.id_vs_name.left.at(id1);
 
         bool is_cross_strand = (reversal0 != reversal1);
-        bool in_ref = graph.has_edge(name0, reversal0, name1, reversal1);
+        bool in_ref = ref_graph.has_edge(name0, reversal0, name1, reversal1);
         bool in_non_ref = true;
 
         // All the mutual edges have been iterated already, don't use them again
         if (not in_ref){
-            f(id0, id1, is_cross_strand, in_ref, in_non_ref);
+            EdgeDescriptor e(
+                name0,
+                name1,
+                id0,
+                id1,
+                is_cross_strand,
+                in_ref,
+                in_non_ref);
+
+            f(e);
         }
     }
 }

@@ -8,6 +8,7 @@ using overlap_analysis::load_adjacency_csv_as_graph;
 using overlap_analysis::RegionalOverlapMap;
 using overlap_analysis::ShastaLabel;
 using overlap_analysis::EdgeDiff;
+using overlap_analysis::EdgeDescriptor;
 
 #include <iostream>
 #include <string>
@@ -84,7 +85,7 @@ void evaluate_overlaps(
         path excluded_reads_path,
         uint16_t label_type,
         bool plot,
-        bool disable_node_union
+        bool no_intersection
         ){
 
     if (exists(output_directory)){
@@ -101,7 +102,8 @@ void evaluate_overlaps(
     construct_graph(overlap_path, graph, min_quality);
 
     // By default, remove all nodes that arent shared by both graphs
-    if (not disable_node_union){
+    if (not no_intersection){
+        cerr << "Intersecting nodes..." << '\n';
         ref_graph.node_union(graph);
         graph.node_union(ref_graph);
     }
@@ -125,22 +127,21 @@ void evaluate_overlaps(
         throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
     }
 
+    edge_table_file << "name0,name1,isSameStrand,passesReadGraph2Criteria,inReadGraph,inRef" << '\n';
+
     diff.for_each_edge_comparison(
             ref_graph,
             graph,
-            [&](uint32_t id0,
-                uint32_t id1,
-                bool is_cross_strand,
-                bool in_ref,
-                bool in_non_ref){
+            [&](EdgeDescriptor& e){
 
         ShastaLabel label;
-        auto success = graph.find_label(id0, id1, is_cross_strand, label);
+        auto success = graph.find_label(e.id0, e.id1, e.is_cross_strand, label);
 
-        // TODO add names to the parameter list and consider using a class to transfer data...
-        // id is insufficient for writing the output table
         if (success){
-            edge_table_file << "stuff" << '\n';
+            edge_table_file << e.name0 << ',' << e.name1 << ',' << (e.is_cross_strand ? "No" : "Yes") << ','
+                            << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
+                            << (label.in_read_graph ? "Yes" : "No") << ','
+                            << (e.in_ref ? "Yes" : "No") << '\n';
         }
     });
 
@@ -160,7 +161,7 @@ int main(int argc, char* argv[]){
     uint32_t min_quality;
     uint16_t label_type;
     bool plot;
-    bool disable_node_union;
+    bool no_intersection;
 
     options_description options("Arguments:");
 
@@ -168,14 +169,14 @@ int main(int argc, char* argv[]){
             ("a",
              value<path>(&ref_overlap_path)
              ->required(),
-             "File path of file from which overlap can be inferred\n:"
+             "REFERENCE GRAPH: path of file from which overlap can be inferred:\n"
              "\tPAF file containing alignments to some reference\n "
              "\tCSV file containing a list of reads pairs, with an indication for whether the overlap is cross-strand\n")
 
             ("b",
              value<path>(&overlap_path)
              ->required(),
-             "File path of file from which overlap can be inferred:\n"
+             "GRAPH TO BE EVALUATED: path of file from which overlap can be inferred:\n"
              "\tPAF file containing alignments to some reference \n"
              "\tCSV file containing a list of reads pairs, with an indication for whether the overlap is cross-strand\n")
 
@@ -209,8 +210,8 @@ int main(int argc, char* argv[]){
              "Whether to render the graph as SVG or not. \n"
              "Strongly discouraged for graphs with more than a few thousand nodes")
 
-            ("disable_node_union",
-             bool_switch(&disable_node_union)->
+            ("no_intersection",
+             bool_switch(&no_intersection)->
              default_value(false),
              "Whether to allow nodes that aren't in both graphs. \n"
              "If this option is specified, all nodes that aren't shared in a and b graph will NOT be deleted")
@@ -234,7 +235,7 @@ int main(int argc, char* argv[]){
             excluded_reads_path,
             label_type,
             plot,
-            disable_node_union);
+            no_intersection);
 
     return 0;
 }
