@@ -3,6 +3,7 @@
 #include "graph_utils.hpp"
 
 using overlap_analysis::DoubleStrandedGraph;
+using overlap_analysis::AdjacencyMap;
 using overlap_analysis::load_paf_as_graph;
 using overlap_analysis::load_adjacency_csv_as_graph;
 using overlap_analysis::RegionalOverlapMap;
@@ -61,15 +62,28 @@ void exclude_reads_from_graph(
 
 
 void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_quality){
-    RegionalOverlapMap _;
-
     if (file_path.extension().string() == ".csv"){
         cerr << "Constructing graph from csv file...\n";
         load_adjacency_csv_as_graph(file_path, graph);
     }
     else if (file_path.extension().string() == ".paf"){
         cerr << "Constructing graph from paf file...\n";
-        load_paf_as_graph(file_path, _, graph, min_quality);
+        load_paf_as_graph(file_path, graph, min_quality);
+    }
+    else{
+        throw runtime_error("ERROR: overlap format does not match 'csv' or 'paf' extension type");
+    }
+}
+
+
+void construct_adjacency_map(path file_path, AdjacencyMap<ShastaLabel>& adjacency, uint32_t min_quality){
+    if (file_path.extension().string() == ".csv"){
+        cerr << "Constructing graph from csv file...\n";
+        load_adjacency_csv_as_adjacency_map(file_path, adjacency);
+    }
+    else if (file_path.extension().string() == ".paf"){
+        cerr << "Constructing graph from paf file...\n";
+        load_paf_as_adjacency_map(file_path, adjacency, min_quality);
     }
     else{
         throw runtime_error("ERROR: overlap format does not match 'csv' or 'paf' extension type");
@@ -95,61 +109,61 @@ void evaluate_overlaps(
         create_directories(output_directory);
     }
 
-    DoubleStrandedGraph ref_graph;
-    DoubleStrandedGraph graph;
+    AdjacencyMap<ShastaLabel> ref_adjacency;
+    AdjacencyMap<ShastaLabel> adjacency;
 
-    construct_graph(ref_overlap_path, ref_graph, min_quality);
-    construct_graph(overlap_path, graph, min_quality);
+    construct_adjacency_map(ref_overlap_path, ref_adjacency, min_quality);
+    construct_adjacency_map(overlap_path, adjacency, min_quality);
 
     // By default, remove all nodes that arent shared by both graphs
     if (not no_intersection){
         cerr << "Intersecting nodes..." << '\n';
-        ref_graph.node_union(graph);
-        graph.node_union(ref_graph);
+//        ref_graph.node_union(graph);
+//        graph.node_union(ref_graph);
     }
 
     if (not excluded_reads_path.empty()){
-        exclude_reads_from_graph(ref_graph, excluded_reads_path, output_directory / "excluded_ref_overlaps.txt");
-        exclude_reads_from_graph(graph, excluded_reads_path, output_directory / "excluded_overlaps.txt");
+//        exclude_reads_from_graph(ref_graph, excluded_reads_path, output_directory / "excluded_ref_overlaps.txt");
+//        exclude_reads_from_graph(graph, excluded_reads_path, output_directory / "excluded_overlaps.txt");
     }
 
     if (plot) {
-        render_graph(ref_graph, label_type, output_directory, "ref_overlap_graph");
-        render_graph(graph, label_type, output_directory, "overlap_graph");
+//        render_graph(ref_graph, label_type, output_directory, "ref_overlap_graph");
+//        render_graph(graph, label_type, output_directory, "overlap_graph");
     }
 
-    cerr << "Evaluating edge differences..." << '\n';
-    EdgeDiff diff;
-
-    path edge_table_filename = output_directory / "labeled_overlaps.csv";
-    ofstream edge_table_file(edge_table_filename);
-    if (not edge_table_file.is_open() or not edge_table_file.good()){
-        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
-    }
-
-    edge_table_file << "name0,name1,isSameStrand,passesReadGraph2Criteria,inReadGraph,inRef" << '\n';
-
-    diff.for_each_edge_comparison(
-            ref_graph,
-            graph,
-            [&](EdgeDescriptor& e){
-
-        ShastaLabel label;
-        auto success = graph.find_label(e.id0, e.id1, e.is_cross_strand, label);
-
-        if (success){
-            edge_table_file << e.name0 << ',' << e.name1 << ',' << (e.is_cross_strand ? "No" : "Yes") << ','
-                            << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
-                            << (label.in_read_graph ? "Yes" : "No") << ','
-                            << (e.in_ref ? "Yes" : "No") << '\n';
-        }
-    });
-
-    ofstream summary_file(output_directory / "summary.txt");
-    if (not summary_file.is_open() or not summary_file.good()){
-        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
-    }
-    summary_file << diff;
+//    cerr << "Evaluating edge differences..." << '\n';
+//    EdgeDiff diff;
+//
+//    path edge_table_filename = output_directory / "labeled_overlaps.csv";
+//    ofstream edge_table_file(edge_table_filename);
+//    if (not edge_table_file.is_open() or not edge_table_file.good()){
+//        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
+//    }
+//
+//    edge_table_file << "name0,name1,isSameStrand,passesReadGraph2Criteria,inReadGraph,inRef" << '\n';
+//
+//    diff.for_each_edge_comparison(
+//            ref_graph,
+//            graph,
+//            [&](EdgeDescriptor& e){
+//
+//        ShastaLabel label;
+//        auto success = graph.find_label(e.id0, e.id1, e.is_cross_strand, label);
+//
+//        if (success){
+//            edge_table_file << e.name0 << ',' << e.name1 << ',' << (e.is_cross_strand ? "No" : "Yes") << ','
+//                            << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
+//                            << (label.in_read_graph ? "Yes" : "No") << ','
+//                            << (e.in_ref ? "Yes" : "No") << '\n';
+//        }
+//    });
+//
+//    ofstream summary_file(output_directory / "summary.txt");
+//    if (not summary_file.is_open() or not summary_file.good()){
+//        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
+//    }
+//    summary_file << diff;
 }
 
 

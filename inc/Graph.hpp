@@ -81,10 +81,18 @@ public:
 
     ShastaLabel();
     ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref=false);
+
+    ShastaLabel& operator|=(ShastaLabel& b){
+        passes_readgraph2_criteria = passes_readgraph2_criteria or b.passes_readgraph2_criteria;
+        in_read_graph = in_read_graph or b.in_read_graph;
+        in_ref = in_ref or b.in_ref;
+
+        return *this;
+    }
 };
 
 
-template <class T> class EdgeLabels {
+template <class T> class AdjacencyMap {
 public:
     vector <array <map <size_t, size_t>, 2> > edges;
     sizet_string_bimap id_vs_name;
@@ -138,7 +146,7 @@ public:
 
 class DoubleStrandedGraph: public UndirectedGraph {
 public:
-    EdgeLabels <ShastaLabel> edge_labels;
+    AdjacencyMap <ShastaLabel> edge_labels;
 
     /// Methods ///
     DoubleStrandedGraph()=default;
@@ -218,17 +226,43 @@ void create_graph_edges_from_overlap_map(
         DoubleStrandedGraph& graph);
 
 
+void for_each_paf_element(
+        path paf_path,
+        uint32_t min_quality,
+        const function<void(
+                string& region_name,
+                string& read_name,
+                uint32_t start,
+                uint32_t stop,
+                uint32_t quality,
+                bool is_reverse)>& f);
+
+
 void load_paf_as_graph(
         path paf_path,
-        RegionalOverlapMap& overlap_map,
         DoubleStrandedGraph& graph,
         uint32_t min_quality);
+
+
+void load_paf_as_adjacency_map(path paf_path, AdjacencyMap<ShastaLabel>& adjacency_map, uint32_t min_quality);
+
+
+void for_each_edge_in_shasta_adjacency_csv(
+        path adjacency_path,
+        const function<void(
+                string& name_a,
+                string& name_b,
+                bool is_cross_strand,
+                ShastaLabel& label)>& f);
 
 
 void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph);
 
 
-template <class T> size_t EdgeLabels<T>::insert_node(const string& read_name){
+void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap<ShastaLabel>& adjacency_map);
+
+
+template <class T> size_t AdjacencyMap<T>::insert_node(const string& read_name){
     auto result = id_vs_name.right.find(read_name);
     size_t id;
 
@@ -247,28 +281,18 @@ template <class T> size_t EdgeLabels<T>::insert_node(const string& read_name){
 }
 
 
-template <class T> void EdgeLabels<T>::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    if (id0 >= edges.size()){
-        edges.resize(id0+1);
-    }
-
-    if (id1 >= edges.size()){
-        edges.resize(id1+1);
-    }
-
-    auto iter0 = edges[id0][is_cross_strand].find(id1);
-    auto iter1 = edges[id1][is_cross_strand].find(id0);
+template <class T> void AdjacencyMap<T>::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
 
     // If an entry is not found, it should not be found in both directions
-    if ((iter0 == edges[id0][is_cross_strand].end()) and (iter1 == edges[id1][is_cross_strand].end())){
+    if (iter0 == edges[id0][is_cross_strand].end()){
         labels.emplace_back(label);
-        edges[id0][is_cross_strand].emplace(id1,labels.size()-1);
-        edges[id1][is_cross_strand].emplace(id0,labels.size()-1);
+        edges.at(id0)[is_cross_strand].emplace(id1,labels.size()-1);
+        edges.at(id1)[is_cross_strand].emplace(id0,labels.size()-1);
     }
-        // If it exists already, replace it
-    else if ((iter0 != edges[id0][is_cross_strand].end()) and (iter1 != edges[id1][is_cross_strand].end())){
-        edges[id0][is_cross_strand].emplace(id1,iter0->second);
-        edges[id1][is_cross_strand].emplace(id0,iter1->second);
+    // If the label/edge exists already, increment it (find the union of label membership)
+    else if (iter0 != edges.at(id0)[is_cross_strand].end()){
+        labels.at(iter0->second) |= label;
     }
     else{
         throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
@@ -276,7 +300,7 @@ template <class T> void EdgeLabels<T>::insert_edge(uint32_t id0, uint32_t id1, b
 }
 
 
-template <class T> bool EdgeLabels<T>::find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label) {
+template <class T> bool AdjacencyMap<T>::find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label) {
     if (id0 >= edges.size() or id1 >= edges.size()){
         cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
         return false;

@@ -289,7 +289,6 @@ set(EXECUTABLES
         filter_chimeras_from_paf
         filter_palindromes_by_quality
         find_overlapping_alignments
-        label_alignment_info
         plot_alignment_as_double_stranded_graph
         self_align
         )

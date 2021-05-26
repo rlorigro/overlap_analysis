@@ -172,11 +172,10 @@ void plot_graph(
             subgraph_node_name,
             subgraph_radius);
 
-    RegionalOverlapMap overlap_map;
     DoubleStrandedGraph overlap_graph;
 
     cerr << "Loading PAF as graph...\n";
-    load_paf_as_graph(paf_path, overlap_map, overlap_graph, min_quality);
+    load_paf_as_graph(paf_path, overlap_graph, min_quality);
 
     // Delete any nodes from the graph if a list of reads to be excluded is provided
     if (not excluded_reads_path.empty()){
