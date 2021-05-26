@@ -45,7 +45,6 @@ using std::cerr;
 using std::cout;
 
 typedef bimap<uint32_t,string> uint32_string_bimap;
-typedef uint32_string_bimap::value_type bimap_pair;
 
 
 namespace overlap_analysis {

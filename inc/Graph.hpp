@@ -57,7 +57,7 @@ using std::array;
 using std::map;
 
 typedef bimap<uint32_t,string> uint32_string_bimap;
-typedef uint32_string_bimap::value_type bimap_pair;
+typedef bimap<size_t,string> sizet_string_bimap;
 
 
 namespace overlap_analysis{
@@ -77,15 +77,22 @@ class ShastaLabel {
 public:
     bool passes_readgraph2_criteria;
     bool in_read_graph;
+    bool in_ref;
 
-    ShastaLabel()=default;
-    ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph);
+    ShastaLabel();
+    ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref=false);
 };
 
 
 template <class T> class EdgeLabels {
 public:
-    vector <array <map <size_t, T>, 2> > data;
+    vector <array <map <size_t, size_t>, 2> > edges;
+    sizet_string_bimap id_vs_name;
+    vector <T> labels;
+
+    size_t insert_node(const string& read_name);
+    void insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
+    bool find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
 };
 
 
@@ -221,37 +228,79 @@ void load_paf_as_graph(
 void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph);
 
 
-template <class T> void DoubleStrandedGraph::insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    if (id0 >= edge_labels.data.size()){
-        edge_labels.data.resize(id0+1);
+template <class T> size_t EdgeLabels<T>::insert_node(const string& read_name){
+    auto result = id_vs_name.right.find(read_name);
+    size_t id;
+
+    // The bimap for id <-> name is not necessarily initialized for this read.
+    // If it already exists, then just fetch the ID
+    if (result != id_vs_name.right.end()) {
+        id = result->second;
     }
-    edge_labels.data[id0][is_cross_strand].emplace(id1,label);
+    // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
+    else{
+        id = id_vs_name.size();
+        id_vs_name.insert(sizet_string_bimap::value_type(id, read_name));
+    }
+
+    return id;
 }
 
 
-template <class T> bool DoubleStrandedGraph::find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    if (id0 >= edge_labels.data.size() or id1 >= edge_labels.data.size()){
+template <class T> void EdgeLabels<T>::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    if (id0 >= edges.size()){
+        edges.resize(id0+1);
+    }
+
+    if (id1 >= edges.size()){
+        edges.resize(id1+1);
+    }
+
+    auto iter0 = edges[id0][is_cross_strand].find(id1);
+    auto iter1 = edges[id1][is_cross_strand].find(id0);
+
+    // If an entry is not found, it should not be found in both directions
+    if ((iter0 == edges[id0][is_cross_strand].end()) and (iter1 == edges[id1][is_cross_strand].end())){
+        labels.emplace_back(label);
+        edges[id0][is_cross_strand].emplace(id1,labels.size()-1);
+        edges[id1][is_cross_strand].emplace(id0,labels.size()-1);
+    }
+        // If it exists already, replace it
+    else if ((iter0 != edges[id0][is_cross_strand].end()) and (iter1 != edges[id1][is_cross_strand].end())){
+        edges[id0][is_cross_strand].emplace(id1,iter0->second);
+        edges[id1][is_cross_strand].emplace(id0,iter1->second);
+    }
+    else{
+        throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
+    }
+}
+
+
+template <class T> bool EdgeLabels<T>::find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label) {
+    if (id0 >= edges.size() or id1 >= edges.size()){
         cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
         return false;
     }
 
     bool success = false;
 
-    // Edges are bidirectional, but only one label is stored, so both directions must be searched
-    auto iter0 = edge_labels.data[id0][is_cross_strand].find(id1);
-    if (iter0 != edge_labels.data[id0][is_cross_strand].end()){
-        label = iter0->second;
+    auto iter0 = edges[id0][is_cross_strand].find(id1);
+    if (iter0 != edges[id0][is_cross_strand].end()){
+        label = labels.at(iter0->second);
         success = true;
-    }
-    else{
-        auto iter1 = edge_labels.data[id1][is_cross_strand].find(id0);
-        if (iter1 != edge_labels.data[id1][is_cross_strand].end()){
-            label = iter1->second;
-            success = true;
-        }
     }
 
     return success;
+}
+
+
+template <class T> void DoubleStrandedGraph::insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    edge_labels.insert_edge(id0, id1, is_cross_strand, label);
+}
+
+
+template <class T> bool DoubleStrandedGraph::find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
+    edge_labels.find(id0, id1, is_cross_strand, label);
 }
 
 

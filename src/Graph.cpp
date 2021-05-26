@@ -6,10 +6,20 @@ using ogdf::makeParallelFree;
 
 namespace overlap_analysis{
 
-ShastaLabel::ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph):
+
+ShastaLabel::ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref):
     passes_readgraph2_criteria(passes_readgraph2_criteria),
-    in_read_graph(in_read_graph)
+    in_read_graph(in_read_graph),
+    in_ref(in_ref)
 {}
+
+
+ShastaLabel::ShastaLabel():
+    passes_readgraph2_criteria(false),
+    in_read_graph(false),
+    in_ref(false)
+{}
+
 
 BfsQueueElement::BfsQueueElement(node original_node, node subgraph_node):
     original_node(original_node),
@@ -89,7 +99,7 @@ uint32_t DoubleStrandedGraph::add_node(const string& read_name){
     // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
     else{
         id = id_vs_name.size();
-        id_vs_name.insert(bimap_pair(id, read_name));
+        id_vs_name.insert(uint32_string_bimap::value_type(id, read_name));
     }
 
     reverse_id = 2*id + 1;
@@ -264,10 +274,10 @@ void DoubleStrandedGraph::create_subgraph(const string& start_name, uint32_t rad
     auto reverse_subgraph_start_node = subgraph.graph.newNode();
 
     // Update the subgraph nodes list and Keep track of the name that the subgraph node should map to
-    subgraph.id_vs_name.insert(bimap_pair(subgraph.nodes.size(), start_name + '+'));
+    subgraph.id_vs_name.insert(uint32_string_bimap::value_type(subgraph.nodes.size(), start_name + '+'));
     subgraph.nodes.emplace_back(forward_subgraph_start_node);
 
-    subgraph.id_vs_name.insert(bimap_pair(subgraph.nodes.size(), start_name + '-'));
+    subgraph.id_vs_name.insert(uint32_string_bimap::value_type(subgraph.nodes.size(), start_name + '-'));
     subgraph.nodes.emplace_back(reverse_subgraph_start_node);
 
     // Initialize the queue and make a new node for the forward and reverse nodes
@@ -308,7 +318,7 @@ void DoubleStrandedGraph::create_subgraph(const string& start_name, uint32_t rad
                     q.emplace(other, new_node);
                     distance[other->index()] = d + 1;
 
-                    subgraph.id_vs_name.insert(bimap_pair(subgraph.nodes.size(), subgraph_name));
+                    subgraph.id_vs_name.insert(uint32_string_bimap::value_type(subgraph.nodes.size(), subgraph_name));
                     subgraph.nodes.emplace_back(new_node);
                 }
                 // If it has been visited, just create a new edge
@@ -743,6 +753,79 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 
                 ShastaLabel l(passes_readgraph2_criteria, in_readgraph);
                 graph.insert_label(id_a, id_b, is_cross_strand, l);
+            }
+
+            token.resize(0);
+            n_delimiters = 0;
+            n_lines++;
+        }
+        else {
+            token += c;
+        }
+    }
+}
+
+
+void load_adjacency_csv_as_adjacency_map(path adjacency_path, EdgeLabels<ShastaLabel>& adjacency_map){
+    ifstream file(adjacency_path);
+
+    if (not file.good()){
+        throw runtime_error("ERROR: could not read file: " + adjacency_path.string());
+    }
+
+    uint32_t n_delimiters = 0;
+    uint32_t n_lines = 0;
+    string token;
+    string name_a;
+    string name_b;
+    bool is_cross_strand;
+    bool passes_readgraph2_criteria = false;
+    bool in_readgraph = false;
+
+    char c;
+
+    while (file.get(c)){
+        if (c == ',') {
+            if (n_delimiters == 0){
+                name_a = token;
+            }
+            else if (n_delimiters == 1){
+                name_b = token;
+            }
+            else if (n_delimiters == 2){
+                // Depending on the format there may be more data after this token (shasta uses 'isSameStrand'=Yes|No)
+                is_cross_strand = (token == "No");
+            }
+            else if (n_delimiters == 3){
+                // Depending on the format there may be more data after this token
+                passes_readgraph2_criteria = (token == "Yes");
+            }
+            else if (n_delimiters == 4){
+                // Depending on the format there may be more data after this token
+                in_readgraph = (token == "Yes");
+            }
+
+            token.resize(0);
+            n_delimiters++;
+        }
+        else if (c == '\n'){
+            // Skip header line
+            if (n_lines != 0){
+                if (n_delimiters < 2){
+                    throw runtime_error(
+                            "ERROR: file provided does not contain sufficient delimiters to be adjacency csv at line: " +
+                            to_string(n_lines));
+                }
+                if (n_delimiters == 2){
+                    // shasta uses 'isSameStrand'=Yes|No
+                    is_cross_strand = (token == "No");
+                }
+
+                ShastaLabel l(passes_readgraph2_criteria, in_readgraph);
+
+                auto id_a = adjacency_map.insert_node(name_a);
+                auto id_b = adjacency_map.insert_node(name_b);
+                adjacency_map.insert_edge(id_a, id_b, is_cross_strand, l);
             }
 
             token.resize(0);
