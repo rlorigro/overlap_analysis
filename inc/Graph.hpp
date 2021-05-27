@@ -75,14 +75,16 @@ public:
 
 class ShastaLabel {
 public:
+    bool in_candidates;
     bool passes_readgraph2_criteria;
     bool in_read_graph;
     bool in_ref;
 
     ShastaLabel();
-    ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref=false);
+    ShastaLabel(bool in_candidates, bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref);
 
     ShastaLabel& operator|=(ShastaLabel& b){
+        in_candidates = in_candidates or b.in_candidates;
         passes_readgraph2_criteria = passes_readgraph2_criteria or b.passes_readgraph2_criteria;
         in_read_graph = in_read_graph or b.in_read_graph;
         in_ref = in_ref or b.in_ref;
@@ -92,15 +94,20 @@ public:
 };
 
 
-template <class T> class AdjacencyMap {
+class AdjacencyMap {
 public:
     vector <array <map <size_t, size_t>, 2> > edges;
     sizet_string_bimap id_vs_name;
-    vector <T> labels;
+    vector <ShastaLabel> labels;
 
     size_t insert_node(const string& read_name);
-    void insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
-    bool find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
+    void insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label);
+    bool find(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label);
+    bool find(string& name0, string& name1, bool is_cross_strand, ShastaLabel& label);
+    pair<bool,size_t> find(uint32_t id0, uint32_t id1, bool is_cross_strand);
+    pair<bool,size_t> find(string& name0, string& name1, bool is_cross_strand);
+    void erase_edge(uint32_t id0, uint32_t id1, bool is_cross_strand);
+    void erase_node(uint32_t id);
 };
 
 
@@ -146,8 +153,6 @@ public:
 
 class DoubleStrandedGraph: public UndirectedGraph {
 public:
-    AdjacencyMap <ShastaLabel> edge_labels;
-
     /// Methods ///
     DoubleStrandedGraph()=default;
 
@@ -173,52 +178,7 @@ public:
     void node_union(const UndirectedGraph& other_graph);
 
     void create_subgraph(const string& start_name, uint32_t radius, Graph& subgraph);
-
-    template <class T> void insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
-    template <class T> bool find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label);
 };
-
-
-class EdgeDescriptor {
-public:
-    const string& name0;
-    const string& name1;
-    const uint32_t id0;
-    const uint32_t id1;
-    const bool is_cross_strand;
-    const bool in_ref;
-    const bool in_non_ref;
-
-    EdgeDescriptor(
-        const string& name0,
-        const string& name1,
-        const uint32_t id0,
-        const uint32_t id1,
-        const bool is_cross_strand,
-        const bool in_ref,
-        const bool in_non_ref);
-};
-
-
-class EdgeDiff{
-public:
-    /// Attributes ///
-    set <edge> a_only_edges;
-    set <edge> b_only_edges;
-    set <edge> a_both_edges;
-    set <edge> b_both_edges;
-
-    /// Methods ///
-    EdgeDiff()=default;
-    void agnostic_diff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory);
-    void for_each_edge_comparison(
-            const DoubleStrandedGraph& ref_graph,
-            const DoubleStrandedGraph& graph,
-            const function<void(EdgeDescriptor& e)>& f);
-};
-
-
-ostream& operator<<(ostream& o, EdgeDiff& g);
 
 
 void create_graph_edges_from_overlap_map(
@@ -238,13 +198,26 @@ void for_each_paf_element(
                 bool is_reverse)>& f);
 
 
+void for_each_paf_element(
+        path paf_path,
+        uint32_t min_quality,
+        const function<void(PafElement& paf_element)>& f
+);
+
+
+void for_each_overlap_in_overlap_map(
+        RegionalOverlapMap& overlap_map,
+        const function<void(size_t id, size_t other_id)>& f
+);
+
+
 void load_paf_as_graph(
         path paf_path,
         DoubleStrandedGraph& graph,
         uint32_t min_quality);
 
 
-void load_paf_as_adjacency_map(path paf_path, AdjacencyMap<ShastaLabel>& adjacency_map, uint32_t min_quality);
+void load_paf_as_adjacency_map(path paf_path, AdjacencyMap& adjacency_map, uint32_t min_quality);
 
 
 void for_each_edge_in_shasta_adjacency_csv(
@@ -259,74 +232,17 @@ void for_each_edge_in_shasta_adjacency_csv(
 void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph);
 
 
-void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap<ShastaLabel>& adjacency_map);
+void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap& adjacency_map);
 
 
-template <class T> size_t AdjacencyMap<T>::insert_node(const string& read_name){
-    auto result = id_vs_name.right.find(read_name);
-    size_t id;
-
-    // The bimap for id <-> name is not necessarily initialized for this read.
-    // If it already exists, then just fetch the ID
-    if (result != id_vs_name.right.end()) {
-        id = result->second;
-    }
-    // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
-    else{
-        id = id_vs_name.size();
-        id_vs_name.insert(sizet_string_bimap::value_type(id, read_name));
-    }
-
-    return id;
-}
-
-
-template <class T> void AdjacencyMap<T>::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
-
-    // If an entry is not found, it should not be found in both directions
-    if (iter0 == edges[id0][is_cross_strand].end()){
-        labels.emplace_back(label);
-        edges.at(id0)[is_cross_strand].emplace(id1,labels.size()-1);
-        edges.at(id1)[is_cross_strand].emplace(id0,labels.size()-1);
-    }
-    // If the label/edge exists already, increment it (find the union of label membership)
-    else if (iter0 != edges.at(id0)[is_cross_strand].end()){
-        labels.at(iter0->second) |= label;
-    }
-    else{
-        throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
-    }
-}
-
-
-template <class T> bool AdjacencyMap<T>::find(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label) {
-    if (id0 >= edges.size() or id1 >= edges.size()){
-        cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
-        return false;
-    }
-
-    bool success = false;
-
-    auto iter0 = edges[id0][is_cross_strand].find(id1);
-    if (iter0 != edges[id0][is_cross_strand].end()){
-        label = labels.at(iter0->second);
-        success = true;
-    }
-
-    return success;
-}
-
-
-template <class T> void DoubleStrandedGraph::insert_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    edge_labels.insert_edge(id0, id1, is_cross_strand, label);
-}
-
-
-template <class T> bool DoubleStrandedGraph::find_label(uint32_t id0, uint32_t id1, bool is_cross_strand, T& label){
-    edge_labels.find(id0, id1, is_cross_strand, label);
-}
-
+void for_each_edge_in_adjacency(
+        AdjacencyMap& a,
+        const function<void(
+                const string& name0,
+                const string& name1,
+                bool is_cross_strand,
+                const ShastaLabel& label
+        )>& f);
 
 }
 

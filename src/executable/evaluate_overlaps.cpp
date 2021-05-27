@@ -5,11 +5,13 @@
 using overlap_analysis::DoubleStrandedGraph;
 using overlap_analysis::AdjacencyMap;
 using overlap_analysis::load_paf_as_graph;
+using overlap_analysis::for_each_paf_element;
 using overlap_analysis::load_adjacency_csv_as_graph;
+using overlap_analysis::for_each_edge_in_shasta_adjacency_csv;
+using overlap_analysis::for_each_edge_in_adjacency;
+using overlap_analysis::PafElement;
 using overlap_analysis::RegionalOverlapMap;
 using overlap_analysis::ShastaLabel;
-using overlap_analysis::EdgeDiff;
-using overlap_analysis::EdgeDescriptor;
 
 #include <iostream>
 #include <string>
@@ -41,26 +43,6 @@ void load_excluded_read_names_as_set(path excluded_reads_path, set<string>& excl
 }
 
 
-void exclude_reads_from_graph(
-        DoubleStrandedGraph& graph,
-        path excluded_reads_path,
-        path output_path
-){
-    ofstream file(output_path);
-    if (not file.good()){
-        throw runtime_error("ERROR: could not write to output: " + output_path.string());
-    }
-
-    set<string> excluded_reads;
-    load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
-
-    for (const string& name: excluded_reads){
-        graph.remove_node(name);
-        file << name << '\n';
-    }
-}
-
-
 void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_quality){
     if (file_path.extension().string() == ".csv"){
         cerr << "Constructing graph from csv file...\n";
@@ -76,7 +58,7 @@ void construct_graph(path file_path, DoubleStrandedGraph& graph, uint32_t min_qu
 }
 
 
-void construct_adjacency_map(path file_path, AdjacencyMap<ShastaLabel>& adjacency, uint32_t min_quality){
+void construct_adjacency_map(path file_path, uint32_t min_quality, AdjacencyMap& adjacency){
     if (file_path.extension().string() == ".csv"){
         cerr << "Constructing graph from csv file...\n";
         load_adjacency_csv_as_adjacency_map(file_path, adjacency);
@@ -88,6 +70,195 @@ void construct_adjacency_map(path file_path, AdjacencyMap<ShastaLabel>& adjacenc
     else{
         throw runtime_error("ERROR: overlap format does not match 'csv' or 'paf' extension type");
     }
+}
+
+
+void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, AdjacencyMap& adjacency_map){
+    RegionalOverlapMap overlap_map;
+
+    cerr << "\tParsing PAF as interval map..." << '\n';
+    for_each_paf_element(paf_path, min_quality, [&](PafElement& paf_element){
+        uint32_t id;
+        uint32_t forward_id;
+        uint32_t reverse_id;
+
+        // Skip any entries for which the node doesn't exist already
+        if (adjacency_map.id_vs_name.right.find(paf_element.query_name) == adjacency_map.id_vs_name.right.end()){
+            return;
+        }
+
+        id = adjacency_map.insert_node(paf_element.query_name);
+
+        forward_id = 2 * id;
+        reverse_id = 2 * id + 1;
+
+        if (not paf_element.is_reverse) {
+            overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, forward_id);
+        } else {
+            overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, reverse_id);
+        }
+    });
+
+    cerr << "\tUpdating graph edges with inferred overlaps..." << '\n';
+
+    adjacency_map.edges.resize(adjacency_map.id_vs_name.left.size());
+
+    for_each_overlap_in_overlap_map(overlap_map, [&](size_t id, size_t other_id){
+        // Infer cross-strandedness using the even/odd id encoding
+        bool is_cross_strand = ((id % 2) != (other_id % 2));
+
+        // Convert back to single-stranded id
+        id = (id - (id % 2)) / 2;
+        other_id = (other_id - (other_id % 2)) / 2;
+
+        // Create a label that only indicates ref membership
+        ShastaLabel label(false, false, false, true);
+
+        // Insert or update the edge with ref membership
+        adjacency_map.insert_edge(id, other_id, is_cross_strand, label);
+    });
+
+}
+
+
+void add_csv_edges_to_adjacency_map(path adjacency_path, AdjacencyMap& adjacency_map){
+    for_each_edge_in_shasta_adjacency_csv(adjacency_path, [&](
+            string& name_a,
+            string& name_b,
+            bool is_cross_strand,
+            ShastaLabel& label){
+
+        auto id_a = adjacency_map.insert_node(name_a);
+        auto id_b = adjacency_map.insert_node(name_b);
+
+        adjacency_map.edges.resize(adjacency_map.id_vs_name.left.size());
+
+        // Create a label that only indicates ref membership
+        ShastaLabel ref_label(false, false, false, true);
+        adjacency_map.insert_edge(id_a, id_b, is_cross_strand, ref_label);
+    });
+}
+
+
+void add_reference_edges_to_adjacency_map(path file_path, uint32_t min_quality, AdjacencyMap& adjacency){
+    if (file_path.extension().string() == ".csv"){
+        cerr << "Constructing graph from csv file...\n";
+        add_csv_edges_to_adjacency_map(file_path, adjacency);
+    }
+    else if (file_path.extension().string() == ".paf"){
+        cerr << "Constructing graph from paf file...\n";
+        add_paf_edges_to_adjacency_map(file_path, min_quality, adjacency);
+    }
+    else{
+        throw runtime_error("ERROR: overlap format does not match 'csv' or 'paf' extension type");
+    }
+}
+
+
+class Accuracy{
+public:
+    size_t n_false_positives = 0;
+    size_t n_true_positives = 0;
+    size_t n_false_negatives = 0;
+
+    double compute_precision();
+    double compute_sensitivity();
+};
+
+
+double Accuracy::compute_precision(){
+    return (double(n_true_positives) / double(n_true_positives + n_false_positives));
+}
+
+
+double Accuracy::compute_sensitivity(){
+    return (double(n_true_positives) / double(n_true_positives + n_false_negatives));
+}
+
+
+void write_edges_to_csv(path file_path, AdjacencyMap& a){
+    ofstream file(file_path);
+    if (not (file.is_open() and file.good())){
+        throw runtime_error("ERROR: file could not written: " + file_path.string());
+    }
+
+    file << "name0,name1,is_same_strand,in_candidates,passes_readgraph2_criteria,in_read_graph,in_ref," << '\n';
+
+    Accuracy candidate_accuracy;
+    Accuracy filter_criteria_accuracy;
+    Accuracy read_graph_accuracy;
+
+    for_each_edge_in_adjacency(a,
+                               [&](const string& name0,
+                                   const string& name1,
+                                   bool is_cross_strand,
+                                   const ShastaLabel& label){
+        file << name0 << ',' << name1 << ','
+             << (is_cross_strand ? "No" : "Yes") << ','
+             << (label.in_candidates ? "Yes" : "No") << ','
+             << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
+             << (label.in_read_graph ? "Yes" : "No") << ','
+             << (label.in_ref ? "Yes" : "No") << ',' << '\n';
+
+        if (label.in_candidates){
+            if (label.in_ref){
+                candidate_accuracy.n_true_positives++;
+            }
+            else {
+                candidate_accuracy.n_false_positives++;
+            }
+        }
+        if (label.passes_readgraph2_criteria){
+            if (label.in_ref){
+                filter_criteria_accuracy.n_true_positives++;
+            }
+            else {
+                filter_criteria_accuracy.n_false_positives++;
+            }
+        }
+        if (label.in_read_graph){
+            if (label.in_ref){
+                read_graph_accuracy.n_true_positives++;
+            }
+            else {
+                read_graph_accuracy.n_false_positives++;
+            }
+        }
+        if (label.in_ref){
+            if (not label.in_candidates){
+                candidate_accuracy.n_false_negatives++;
+            }
+            if (not label.passes_readgraph2_criteria){
+                filter_criteria_accuracy.n_false_negatives++;
+            }
+            if (not label.in_read_graph){
+                read_graph_accuracy.n_false_negatives++;
+            }
+        }
+    });
+
+    cerr << "candidate_accuracy:\n"
+         << "true_positives:\t" << candidate_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << candidate_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << candidate_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << candidate_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << candidate_accuracy.compute_sensitivity() << '\n';
+
+    cerr << '\n';
+    cerr << "filter_criteria_accuracy:\n"
+         << "true_positives:\t" << filter_criteria_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << filter_criteria_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << filter_criteria_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << filter_criteria_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << filter_criteria_accuracy.compute_sensitivity() << '\n';
+
+    cerr << '\n';
+    cerr << "read_graph_accuracy:\n"
+         << "true_positives:\t" << read_graph_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << read_graph_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << read_graph_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << read_graph_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << read_graph_accuracy.compute_sensitivity() << '\n';
 }
 
 
@@ -109,61 +280,22 @@ void evaluate_overlaps(
         create_directories(output_directory);
     }
 
-    AdjacencyMap<ShastaLabel> ref_adjacency;
-    AdjacencyMap<ShastaLabel> adjacency;
+    AdjacencyMap adjacency;
 
-    construct_adjacency_map(ref_overlap_path, ref_adjacency, min_quality);
-    construct_adjacency_map(overlap_path, adjacency, min_quality);
+    construct_adjacency_map(overlap_path, min_quality, adjacency);
 
-    // By default, remove all nodes that arent shared by both graphs
-    if (not no_intersection){
-        cerr << "Intersecting nodes..." << '\n';
-//        ref_graph.node_union(graph);
-//        graph.node_union(ref_graph);
-    }
+    add_reference_edges_to_adjacency_map(ref_overlap_path, min_quality, adjacency);
 
     if (not excluded_reads_path.empty()){
-//        exclude_reads_from_graph(ref_graph, excluded_reads_path, output_directory / "excluded_ref_overlaps.txt");
-//        exclude_reads_from_graph(graph, excluded_reads_path, output_directory / "excluded_overlaps.txt");
+
     }
 
     if (plot) {
-//        render_graph(ref_graph, label_type, output_directory, "ref_overlap_graph");
-//        render_graph(graph, label_type, output_directory, "overlap_graph");
+
     }
 
-//    cerr << "Evaluating edge differences..." << '\n';
-//    EdgeDiff diff;
-//
-//    path edge_table_filename = output_directory / "labeled_overlaps.csv";
-//    ofstream edge_table_file(edge_table_filename);
-//    if (not edge_table_file.is_open() or not edge_table_file.good()){
-//        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
-//    }
-//
-//    edge_table_file << "name0,name1,isSameStrand,passesReadGraph2Criteria,inReadGraph,inRef" << '\n';
-//
-//    diff.for_each_edge_comparison(
-//            ref_graph,
-//            graph,
-//            [&](EdgeDescriptor& e){
-//
-//        ShastaLabel label;
-//        auto success = graph.find_label(e.id0, e.id1, e.is_cross_strand, label);
-//
-//        if (success){
-//            edge_table_file << e.name0 << ',' << e.name1 << ',' << (e.is_cross_strand ? "No" : "Yes") << ','
-//                            << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
-//                            << (label.in_read_graph ? "Yes" : "No") << ','
-//                            << (e.in_ref ? "Yes" : "No") << '\n';
-//        }
-//    });
-//
-//    ofstream summary_file(output_directory / "summary.txt");
-//    if (not summary_file.is_open() or not summary_file.good()){
-//        throw runtime_error("ERROR: couldn't write file: " + edge_table_filename.string());
-//    }
-//    summary_file << diff;
+    path edge_csv_file_path = output_directory / "labeled_candidates.csv";
+    write_edges_to_csv(edge_csv_file_path, adjacency);
 }
 
 

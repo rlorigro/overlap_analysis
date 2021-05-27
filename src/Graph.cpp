@@ -3,11 +3,13 @@
 #include "ogdf/basic/simple_graph_alg.h"
 
 using ogdf::makeParallelFree;
+using std::tie;
 
 namespace overlap_analysis{
 
 
-ShastaLabel::ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref):
+ShastaLabel::ShastaLabel(bool in_candidates, bool passes_readgraph2_criteria, bool in_read_graph, bool in_ref):
+    in_candidates(in_candidates),
     passes_readgraph2_criteria(passes_readgraph2_criteria),
     in_read_graph(in_read_graph),
     in_ref(in_ref)
@@ -15,6 +17,7 @@ ShastaLabel::ShastaLabel(bool passes_readgraph2_criteria, bool in_read_graph, bo
 
 
 ShastaLabel::ShastaLabel():
+    in_candidates(false),
     passes_readgraph2_criteria(false),
     in_read_graph(false),
     in_ref(false)
@@ -558,8 +561,6 @@ void for_each_overlap_in_overlap_map(
         const function<void(size_t id, size_t other_id)>& f
         ) {
 
-//    set<uint32_t> empty_set = {};
-
     for (auto& item: overlap_map.intervals){
         cerr << item.first << '\n';
         const auto& overlaps = item.second;
@@ -601,7 +602,6 @@ void for_each_paf_element(
         const function<void(PafElement& paf_element)>& f
 ) {
 
-    cerr << "\tParsing PAF as interval map..." << '\n';
     ifstream paf_file(paf_path);
 
     if (not paf_file.good()) {
@@ -695,7 +695,7 @@ void load_paf_as_graph(
 }
 
 
-void load_paf_as_adjacency_map(path paf_path, AdjacencyMap<ShastaLabel>& adjacency_map, uint32_t min_quality){
+void load_paf_as_adjacency_map(path paf_path, AdjacencyMap& adjacency_map, uint32_t min_quality){
 
     RegionalOverlapMap overlap_map;
 
@@ -729,7 +729,7 @@ void load_paf_as_adjacency_map(path paf_path, AdjacencyMap<ShastaLabel>& adjacen
         other_id = (other_id - (other_id % 2)) / 2;
 
         // Create a label that only indicates ref membership
-        ShastaLabel label(false, false, true);
+        ShastaLabel label(false, false, false, true);
 
         adjacency_map.insert_edge(id, other_id, is_cross_strand, label);
     });
@@ -752,19 +752,20 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
             graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
             graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
         }
-
-        graph.insert_label(id_a, id_b, is_cross_strand, label);
     });
 }
 
 
-void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap<ShastaLabel>& adjacency_map){
+void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap& adjacency_map){
     for_each_edge_in_shasta_adjacency_csv(adjacency_path, [&](string& name_a,
                                                               string& name_b,
                                                               bool is_cross_strand,
                                                               ShastaLabel& label){
         auto id_a = adjacency_map.insert_node(name_a);
         auto id_b = adjacency_map.insert_node(name_b);
+
+        adjacency_map.edges.resize(adjacency_map.id_vs_name.left.size());
+
         adjacency_map.insert_edge(id_a, id_b, is_cross_strand, label);
     });
 }
@@ -773,10 +774,10 @@ void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap<Shast
 void for_each_edge_in_shasta_adjacency_csv(
         path adjacency_path,
         const function<void(
-            string& name_a,
-            string& name_b,
-            bool is_cross_strand,
-            ShastaLabel& label)>& f
+                string& name_a,
+                string& name_b,
+                bool is_cross_strand,
+                ShastaLabel& label)>& f
 ){
     ifstream file(adjacency_path);
 
@@ -832,7 +833,7 @@ void for_each_edge_in_shasta_adjacency_csv(
                     is_cross_strand = (token == "No");
                 }
 
-                ShastaLabel l(passes_readgraph2_criteria, in_readgraph);
+                ShastaLabel l(true, passes_readgraph2_criteria, in_readgraph, false);
 
                 f(name_a, name_b, is_cross_strand, l);
             }
@@ -849,150 +850,185 @@ void for_each_edge_in_shasta_adjacency_csv(
 }
 
 
-EdgeDescriptor::EdgeDescriptor(
-        const string& name0,
-        const string& name1,
-        const uint32_t id0,
-        const uint32_t id1,
-        const bool is_cross_strand,
-        const bool in_ref,
-        const bool in_non_ref):
-    name0(name0),
-    name1(name1),
-    id0(id0),
-    id1(id1),
-    is_cross_strand(is_cross_strand),
-    in_ref(in_ref),
-    in_non_ref(in_non_ref)
-{}
+size_t AdjacencyMap::insert_node(const string& read_name){
+    auto result = id_vs_name.right.find(read_name);
+    size_t id;
 
-
-/// Dumb brute force search to compare edges in 2 graphs
-/// A better method might be a joint BFS
-void EdgeDiff::agnostic_diff(const DoubleStrandedGraph& a, const DoubleStrandedGraph& b, path output_directory){
-    ofstream file_a(output_directory / "a_only_edges.csv");
-    ofstream file_b(output_directory / "b_only_edges.csv");
-
-    for (auto edge: a.graph.edges){
-        auto nodes = edge->nodes();
-
-        bool reversal0 = a.is_reverse(nodes[0]->index());
-        bool reversal1 = a.is_reverse(nodes[1]->index());
-
-        auto id0 = a.get_single_stranded_id(nodes[0]->index());
-        auto id1 = a.get_single_stranded_id(nodes[1]->index());
-
-        const auto& name0 = a.id_vs_name.left.at(id0);
-        const auto& name1 = a.id_vs_name.left.at(id1);
-
-        if (b.has_edge(name0, reversal0, name1, reversal1)){
-            a_both_edges.insert(edge);
-        }
-        else{
-            file_a << name0 << ',' << name1 << ',' << (reversal0 == reversal1) <<'\n';
-            a_only_edges.insert(edge);
-        }
+    // The bimap for id <-> name is not necessarily initialized for this read.
+    // If it already exists, then just fetch the ID
+    if (result != id_vs_name.right.end()) {
+        id = result->second;
+    }
+    // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
+    else{
+        id = id_vs_name.size();
+        id_vs_name.insert(sizet_string_bimap::value_type(id, read_name));
     }
 
-    for (auto edge: b.graph.edges){
-        auto nodes = edge->nodes();
+    return id;
+}
 
-        bool reversal0 = b.is_reverse(nodes[0]->index());
-        bool reversal1 = b.is_reverse(nodes[1]->index());
 
-        auto id0 = b.get_single_stranded_id(nodes[0]->index());
-        auto id1 = b.get_single_stranded_id(nodes[1]->index());
+void AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label){
+    auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
 
-        const auto& name0 = b.id_vs_name.left.at(id0);
-        const auto& name1 = b.id_vs_name.left.at(id1);
-
-        if (a.has_edge(name0, reversal0, name1, reversal1)){
-            b_both_edges.insert(edge);
-        }
-        else{
-            file_b << name0 << ',' << name1 << ',' << (reversal0 == reversal1) <<'\n';
-            b_only_edges.insert(edge);
-        }
+    // If an entry is not found, it should not be found in both directions
+    if (iter0 == edges[id0][is_cross_strand].end()){
+        labels.emplace_back(label);
+        edges.at(id0)[is_cross_strand].emplace(id1,labels.size()-1);
+        edges.at(id1)[is_cross_strand].emplace(id0,labels.size()-1);
+    }
+    // If the label/edge exists already, increment it (find the union of label membership)
+    else if (iter0 != edges.at(id0)[is_cross_strand].end()){
+        labels.at(iter0->second) |= label;
+    }
+    else{
+        throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
     }
 }
 
 
-/// Dumb brute force search to compare edges in 2 graphs
-/// A better method might be a joint BFS
-void EdgeDiff::for_each_edge_comparison(
-        const DoubleStrandedGraph& ref_graph,
-        const DoubleStrandedGraph& graph,
-        const function<void(EdgeDescriptor& e)>& f
-){
-    for (auto edge: ref_graph.graph.edges){
-        auto nodes = edge->nodes();
+void AdjacencyMap::erase_edge(uint32_t id0, uint32_t id1, bool is_cross_strand){
+    auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
 
-        bool reversal0 = ref_graph.is_reverse(nodes[0]->index());
-        bool reversal1 = ref_graph.is_reverse(nodes[1]->index());
+    // If an entry is found, erase both edge directions
+    if (iter0 != edges[id0][is_cross_strand].end()){
+        edges.at(id0)[is_cross_strand].erase(iter0);
+        edges.at(id1)[is_cross_strand].erase(id0);
+    }
+}
 
-        auto id0 = ref_graph.get_single_stranded_id(nodes[0]->index());
-        auto id1 = ref_graph.get_single_stranded_id(nodes[1]->index());
 
-        const auto& name0 = ref_graph.id_vs_name.left.at(id0);
-        const auto& name1 = ref_graph.id_vs_name.left.at(id1);
+void AdjacencyMap::erase_node(uint32_t id){
+    // Find all edges associated with this node and remove them
+    for (auto is_cross_strand: {0,1}){
+        for (auto& item: edges[id][is_cross_strand]){
+            auto id1 = item.first;
 
-        bool is_cross_strand = (reversal0 != reversal1);
-        bool in_ref = true;
-        bool in_non_ref = graph.has_edge(name0, reversal0, name1, reversal1);
-
-        EdgeDescriptor e(
-            name0,
-            name1,
-            id0,
-            id1,
-            is_cross_strand,
-            in_ref,
-            in_non_ref);
-
-        f(e);
+            erase_edge(id1,id,is_cross_strand);
+        }
     }
 
-    for (auto edge: graph.graph.edges){
-        auto nodes = edge->nodes();
+    // Remove the name and id from the bimap
+    id_vs_name.left.erase(id);
+}
 
-        bool reversal0 = graph.is_reverse(nodes[0]->index());
-        bool reversal1 = graph.is_reverse(nodes[1]->index());
 
-        auto id0 = graph.get_single_stranded_id(nodes[0]->index());
-        auto id1 = graph.get_single_stranded_id(nodes[1]->index());
+bool AdjacencyMap::find(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label) {
+    if (id0 >= edges.size() or id1 >= edges.size()){
+        cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
+        return false;
+    }
 
-        const auto& name0 = graph.id_vs_name.left.at(id0);
-        const auto& name1 = graph.id_vs_name.left.at(id1);
+    bool success = false;
 
-        bool is_cross_strand = (reversal0 != reversal1);
-        bool in_ref = ref_graph.has_edge(name0, reversal0, name1, reversal1);
-        bool in_non_ref = true;
+    auto iter0 = edges[id0][is_cross_strand].find(id1);
+    if (iter0 != edges[id0][is_cross_strand].end()){
+        label = labels.at(iter0->second);
+        success = true;
+    }
 
-        // All the mutual edges have been iterated already, don't use them again
-        if (not in_ref){
-            EdgeDescriptor e(
-                name0,
-                name1,
-                id0,
-                id1,
-                is_cross_strand,
-                in_ref,
-                in_non_ref);
+    return success;
+}
 
-            f(e);
+
+pair<bool,size_t> AdjacencyMap::find(uint32_t id0, uint32_t id1, bool is_cross_strand) {
+    if (id0 >= edges.size() or id1 >= edges.size()){
+        cerr << "WARNING: attempting to locate edge label with node ID > or == to number of nodes" << '\n';
+        return {false,0};
+    }
+
+    pair<bool,size_t> result = {false,0};
+
+    auto iter0 = edges[id0][is_cross_strand].find(id1);
+    if (iter0 != edges[id0][is_cross_strand].end()){
+        result.first = true;
+        result.second = iter0->second;
+    }
+
+    return result;
+}
+
+
+bool AdjacencyMap::find(string& name0, string& name1, bool is_cross_strand, ShastaLabel& label) {
+    // First check if name0 exists
+    auto iter0 = id_vs_name.right.find(name0);
+
+    if (iter0 == id_vs_name.right.end()){
+        return false;
+    }
+
+    // Then check if name1 exists
+    auto iter1 = id_vs_name.right.find(name1);
+
+    if (iter1 == id_vs_name.right.end()){
+        return false;
+    }
+
+    // See if the edge between name0,id0 and name1,id1 exists
+    bool success = this->find(iter0->second, iter1->second, is_cross_strand, label);
+
+    return success;
+}
+
+
+pair<bool,size_t> AdjacencyMap::find(string& name0, string& name1, bool is_cross_strand) {
+    // First check if name0 exists
+    auto iter0 = id_vs_name.right.find(name0);
+
+    if (iter0 == id_vs_name.right.end()){
+        return {false,0};
+    }
+
+    // Then check if name1 exists
+    auto iter1 = id_vs_name.right.find(name1);
+
+    if (iter1 == id_vs_name.right.end()){
+        return {false,0};
+    }
+
+    // See if the edge between name0,id0 and name1,id1 exists
+    auto result = this->find(iter0->second, iter1->second, is_cross_strand);
+
+    return result;
+}
+
+
+void for_each_edge_in_adjacency(
+        AdjacencyMap& a,
+        const function<void(
+                const string& name0,
+                const string& name1,
+                bool is_cross_strand,
+                const ShastaLabel& label
+        )>& f){
+
+    // Initialize vector to track whether bidirectional edges have been visited
+    vector <bool> visited_a(a.labels.size(), false);
+
+    for (size_t id0=0; id0<a.edges.size(); id0++) {
+        string name0 = a.id_vs_name.left.at(id0);
+
+        for (bool is_cross_strand: {0, 1}) {
+            for (auto& iter: a.edges[id0][is_cross_strand]) {
+                auto id1 = iter.first;
+                auto label_index_a = iter.second;
+
+                // If this edge was visited already in A, then skip it
+                if (visited_a.at(label_index_a)){
+                    continue;
+                }
+
+                // Mark the edge as visited in this graph
+                visited_a.at(label_index_a) = true;
+
+                string name1 = a.id_vs_name.left.at(id1);
+
+                f(name0, name1, is_cross_strand, a.labels[label_index_a]);
+            }
         }
     }
 }
-
-
-ostream& operator<<(ostream& o, EdgeDiff& g){
-    o << "a_edges," << g.a_only_edges.size() << '\n';
-    o << "b_edges," << g.b_only_edges.size() << '\n';
-    o << "a_and_b_edges," << g.b_both_edges.size() << '\n';
-
-    return o;
-}
-
 
 }
 

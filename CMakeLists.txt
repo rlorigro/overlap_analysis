@@ -20,8 +20,8 @@ set(CMAKE_CXX_FLAGS )
 #set(ASAN_OPTIONS=detect_leaks=1)
 
 set(CMAKE_CXX_FLAGS "-fsanitize=address -fexceptions")
-#add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
-add_definitions(-O3 -Wall)              # Much optimization
+add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
+#add_definitions(-O3 -Wall)              # Much optimization
 
 # Definitions needed to eliminate runtime dependency
 # on the boost system library.
