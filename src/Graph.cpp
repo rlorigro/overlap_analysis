@@ -695,6 +695,53 @@ void load_paf_as_graph(
 }
 
 
+void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, AdjacencyMap& adjacency_map){
+    RegionalOverlapMap overlap_map;
+
+    cerr << "\tParsing PAF as interval map..." << '\n';
+    for_each_paf_element(paf_path, min_quality, [&](PafElement& paf_element){
+        uint32_t id;
+        uint32_t forward_id;
+        uint32_t reverse_id;
+
+        // Skip any entries for which the node doesn't exist already
+        if (adjacency_map.id_vs_name.right.find(paf_element.query_name) == adjacency_map.id_vs_name.right.end()){
+            return;
+        }
+
+        id = adjacency_map.insert_node(paf_element.query_name);
+
+        forward_id = 2 * id;
+        reverse_id = 2 * id + 1;
+
+        if (not paf_element.is_reverse) {
+            overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, forward_id);
+        } else {
+            overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, reverse_id);
+        }
+    });
+
+    cerr << "\tUpdating graph edges with inferred overlaps..." << '\n';
+
+    adjacency_map.edges.resize(adjacency_map.id_vs_name.left.size());
+
+    for_each_overlap_in_overlap_map(overlap_map, [&](size_t id, size_t other_id){
+        // Infer cross-strandedness using the even/odd id encoding
+        bool is_cross_strand = ((id % 2) != (other_id % 2));
+
+        // Convert back to single-stranded id
+        id = (id - (id % 2)) / 2;
+        other_id = (other_id - (other_id % 2)) / 2;
+
+        // Create a label that only indicates ref membership
+        ShastaLabel label(false, false, false, true);
+
+        // Insert or update the edge with ref membership
+        adjacency_map.insert_edge(id, other_id, is_cross_strand, label);
+    });
+}
+
+
 void load_paf_as_adjacency_map(path paf_path, AdjacencyMap& adjacency_map, uint32_t min_quality){
 
     RegionalOverlapMap overlap_map;
@@ -869,14 +916,20 @@ size_t AdjacencyMap::insert_node(const string& read_name){
 }
 
 
-void AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label){
+size_t AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label){
+    // Find the edge if it exists. The iterator points to a size_t label_index that contains the label for
+    // this edge in labels[index]
     auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
+    size_t edge_label_index = iter0->second;
 
     // If an entry is not found, it should not be found in both directions
     if (iter0 == edges[id0][is_cross_strand].end()){
         labels.emplace_back(label);
         edges.at(id0)[is_cross_strand].emplace(id1,labels.size()-1);
         edges.at(id1)[is_cross_strand].emplace(id0,labels.size()-1);
+
+        // The edge label index is now the last index of the label vector
+        edge_label_index = labels.size() - 1;
     }
     // If the label/edge exists already, increment it (find the union of label membership)
     else if (iter0 != edges.at(id0)[is_cross_strand].end()){
@@ -885,6 +938,8 @@ void AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand,
     else{
         throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
     }
+
+    return edge_label_index;
 }
 
 
@@ -1029,6 +1084,104 @@ void for_each_edge_in_adjacency(
         }
     }
 }
+
+
+double Accuracy::compute_precision(){
+    return (double(n_true_positives) / double(n_true_positives + n_false_positives));
+}
+
+
+double Accuracy::compute_sensitivity(){
+    return (double(n_true_positives) / double(n_true_positives + n_false_negatives));
+}
+
+
+void write_edges_to_csv(path file_path, AdjacencyMap& a){
+    ofstream file(file_path);
+    if (not (file.is_open() and file.good())){
+        throw runtime_error("ERROR: file could not written: " + file_path.string());
+    }
+
+    file << "name0,name1,is_same_strand,in_candidates,passes_readgraph2_criteria,in_read_graph,in_ref," << '\n';
+
+    Accuracy candidate_accuracy;
+    Accuracy filter_criteria_accuracy;
+    Accuracy read_graph_accuracy;
+
+    for_each_edge_in_adjacency(a,
+                               [&](const string& name0,
+                                   const string& name1,
+                                   bool is_cross_strand,
+                                   const ShastaLabel& label){
+                                   file << name0 << ',' << name1 << ','
+                                        << (is_cross_strand ? "No" : "Yes") << ','
+                                        << (label.in_candidates ? "Yes" : "No") << ','
+                                        << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
+                                        << (label.in_read_graph ? "Yes" : "No") << ','
+                                        << (label.in_ref ? "Yes" : "No") << ',' << '\n';
+
+                                   if (label.in_candidates){
+                                       if (label.in_ref){
+                                           candidate_accuracy.n_true_positives++;
+                                       }
+                                       else {
+                                           candidate_accuracy.n_false_positives++;
+                                       }
+                                   }
+                                   if (label.passes_readgraph2_criteria){
+                                       if (label.in_ref){
+                                           filter_criteria_accuracy.n_true_positives++;
+                                       }
+                                       else {
+                                           filter_criteria_accuracy.n_false_positives++;
+                                       }
+                                   }
+                                   if (label.in_read_graph){
+                                       if (label.in_ref){
+                                           read_graph_accuracy.n_true_positives++;
+                                       }
+                                       else {
+                                           read_graph_accuracy.n_false_positives++;
+                                       }
+                                   }
+                                   if (label.in_ref){
+                                       if (not label.in_candidates){
+                                           candidate_accuracy.n_false_negatives++;
+                                       }
+                                       if (not label.passes_readgraph2_criteria){
+                                           filter_criteria_accuracy.n_false_negatives++;
+                                       }
+                                       if (not label.in_read_graph){
+                                           read_graph_accuracy.n_false_negatives++;
+                                       }
+                                   }
+                               });
+
+    cerr << "candidate_accuracy:\n"
+         << "true_positives: \t" << candidate_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << candidate_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << candidate_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << candidate_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << candidate_accuracy.compute_sensitivity() << '\n';
+
+    cerr << '\n';
+    cerr << "filter_criteria_accuracy:\n"
+         << "true_positives: \t" << filter_criteria_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << filter_criteria_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << filter_criteria_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << filter_criteria_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << filter_criteria_accuracy.compute_sensitivity() << '\n';
+
+    cerr << '\n';
+    cerr << "read_graph_accuracy:\n"
+         << "true_positives: \t" << read_graph_accuracy.n_true_positives << '\n'
+         << "false_positives:\t" << read_graph_accuracy.n_false_positives << '\n'
+         << "false_negatives:\t" << read_graph_accuracy.n_false_negatives << '\n'
+         << "precision:\t" << read_graph_accuracy.compute_precision() << '\n'
+         << "sensitivity:\t" << read_graph_accuracy.compute_sensitivity() << '\n';
+}
+
+
 
 }
 

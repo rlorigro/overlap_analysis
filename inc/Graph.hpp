@@ -63,6 +63,17 @@ typedef bimap<size_t,string> sizet_string_bimap;
 namespace overlap_analysis{
 
 
+class Accuracy{
+public:
+    size_t n_false_positives = 0;
+    size_t n_true_positives = 0;
+    size_t n_false_negatives = 0;
+
+    double compute_precision();
+    double compute_sensitivity();
+};
+
+
 class BfsQueueElement{
 public:
     node original_node;
@@ -101,7 +112,7 @@ public:
     vector <ShastaLabel> labels;
 
     size_t insert_node(const string& read_name);
-    void insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label);
+    size_t insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label);
     bool find(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label);
     bool find(string& name0, string& name1, bool is_cross_strand, ShastaLabel& label);
     pair<bool,size_t> find(uint32_t id0, uint32_t id1, bool is_cross_strand);
@@ -235,6 +246,9 @@ void load_adjacency_csv_as_graph(path adjacency_path, DoubleStrandedGraph& graph
 void load_adjacency_csv_as_adjacency_map(path adjacency_path, AdjacencyMap& adjacency_map);
 
 
+void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, AdjacencyMap& adjacency_map);
+
+
 void for_each_edge_in_adjacency(
         AdjacencyMap& a,
         const function<void(
@@ -243,6 +257,9 @@ void for_each_edge_in_adjacency(
                 bool is_cross_strand,
                 const ShastaLabel& label
         )>& f);
+
+
+void write_edges_to_csv(path file_path, AdjacencyMap& a);
 
 }
 
