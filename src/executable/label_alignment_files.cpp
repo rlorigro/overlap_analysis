@@ -142,16 +142,17 @@ void evaluate_overlaps(
     create_directories(output_directory / "false");
 
     for (size_t i=0; i<adjacency.labels.size(); i++){
-        if (adjacency.labels[i].in_ref){
-            path destination = output_directory / "true" / alignment_files[i].filename();
-            cerr << destination << '\n';
-            // TODO find bug in alignment file paths that creates empty filenames!
-//            rename(alignment_files[i], destination);
-        }
-        else{
-            path destination = output_directory / "false" / alignment_files[i].filename();
-            cerr << destination << '\n';
-//            rename(alignment_files[i], destination);
+        // Ignore ref-only entries
+        if (adjacency.labels[i].in_candidates){
+            if (adjacency.labels[i].in_ref){
+                cerr << '\n' << alignment_files[i] << '\n';
+                path destination = output_directory / "true" / alignment_files[i].filename();
+                rename(alignment_files[i], destination);
+            }
+            else{
+                path destination = output_directory / "false" / alignment_files[i].filename();
+                rename(alignment_files[i], destination);
+            }
         }
     }
 }
