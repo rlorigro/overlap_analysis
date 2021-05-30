@@ -13,6 +13,7 @@ using overlap_analysis::PafElement;
 using overlap_analysis::RegionalOverlapMap;
 using overlap_analysis::ShastaLabel;
 
+#include <unordered_set>
 #include <iostream>
 #include <string>
 
@@ -22,6 +23,7 @@ using std::experimental::filesystem::absolute;
 using std::experimental::filesystem::rename;
 using std::experimental::filesystem::exists;
 using std::experimental::filesystem::path;
+using std::unordered_set;
 using std::runtime_error;
 using std::ifstream;
 using std::ofstream;
@@ -102,6 +104,20 @@ void load_alignment_files_as_adjacency_map(
 }
 
 
+void load_excluded_read_names_as_set(path excluded_reads_path, unordered_set<string>& excluded_reads) {
+    ifstream file(excluded_reads_path);
+    if (not file.good()){
+        throw runtime_error("ERROR: excluded reads file could not be read: " + excluded_reads_path.string());
+    }
+
+    string line;
+
+    while (getline(file, line)){
+        excluded_reads.emplace(line.substr(0, line.size()));
+    }
+}
+
+
 void evaluate_overlaps(
         path ref_overlap_path,
         path alignment_directory,
@@ -122,18 +138,18 @@ void evaluate_overlaps(
 
     load_alignment_files_as_adjacency_map(alignment_directory, adjacency, alignment_files);
 
-    add_paf_edges_to_adjacency_map(ref_overlap_path, min_quality, adjacency);
+    unordered_set<string> excluded_reads;
 
     if (not excluded_reads_path.empty()){
         // TODO: add chimera/palindrome labeling
+        load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
     }
 
-    for_each_edge_in_adjacency(adjacency, [&](const string& name0,
-                                              const string& name1,
-                                              bool is_cross_strand,
-                                              const ShastaLabel& label){
-        cerr << name0 << ' ' << name1 << ' ' << is_cross_strand << ' ' << label.in_ref << '\n';
-    });
+    for (const auto& name: excluded_reads){
+        adjacency.erase_node(name);
+    }
+
+    add_paf_edges_to_adjacency_map(ref_overlap_path, min_quality, adjacency);
 
     path edge_csv_file_path = output_directory / "labeled_candidates.csv";
     write_edges_to_csv(edge_csv_file_path, adjacency);

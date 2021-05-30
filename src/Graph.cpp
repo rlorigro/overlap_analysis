@@ -704,15 +704,19 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
         uint32_t forward_id;
         uint32_t reverse_id;
 
+        auto iter = adjacency_map.id_vs_name.right.find(paf_element.query_name);
+
         // Skip any entries for which the node doesn't exist already
-        if (adjacency_map.id_vs_name.right.find(paf_element.query_name) == adjacency_map.id_vs_name.right.end()){
+        if (iter == adjacency_map.id_vs_name.right.end()){
             return;
         }
 
-        id = adjacency_map.insert_node(paf_element.query_name);
+        id = iter->get_left();
 
         forward_id = 2 * id;
         reverse_id = 2 * id + 1;
+
+        cerr << "Found ref entry for " << paf_element.query_name << ' ' << id << ' ' << forward_id << ' ' << reverse_id << '\n';
 
         if (not paf_element.is_reverse) {
             overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, forward_id);
@@ -722,8 +726,6 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
     });
 
     cerr << "\tUpdating graph edges with inferred overlaps..." << '\n';
-
-    adjacency_map.edges.resize(adjacency_map.id_vs_name.left.size());
 
     for_each_overlap_in_overlap_map(overlap_map, [&](size_t id, size_t other_id){
         // Infer cross-strandedness using the even/odd id encoding
@@ -735,6 +737,8 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
 
         // Create a label that only indicates ref membership
         ShastaLabel label(false, false, false, true);
+
+        cerr << "Updating label for edge: " << id << ' ' << other_id << '\n';
 
         // Insert or update the edge with ref membership
         adjacency_map.insert_edge(id, other_id, is_cross_strand, label);
@@ -919,7 +923,7 @@ size_t AdjacencyMap::insert_node(const string& read_name){
 size_t AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label){
     // Find the edge if it exists. The iterator points to a size_t label_index that contains the label for
     // this edge in labels[index]
-    auto iter0 = edges.at(id0)[is_cross_strand].find(id1);
+    auto iter0 = edges.at(id0).at(is_cross_strand).find(id1);
     size_t edge_label_index = iter0->second;
 
     // If an entry is not found, it should not be found in both directions
@@ -948,6 +952,8 @@ void AdjacencyMap::erase_edge(uint32_t id0, uint32_t id1, bool is_cross_strand){
 
     // If an entry is found, erase both edge directions
     if (iter0 != edges[id0][is_cross_strand].end()){
+        labels[iter0->second] = ShastaLabel(false,false,false,false);
+
         edges.at(id0)[is_cross_strand].erase(iter0);
         edges.at(id1)[is_cross_strand].erase(id0);
     }
@@ -957,15 +963,33 @@ void AdjacencyMap::erase_edge(uint32_t id0, uint32_t id1, bool is_cross_strand){
 void AdjacencyMap::erase_node(uint32_t id){
     // Find all edges associated with this node and remove them
     for (auto is_cross_strand: {0,1}){
+
+        // Find all the other nodes that point to this id and delete those references
         for (auto& item: edges[id][is_cross_strand]){
             auto id1 = item.first;
+            auto label_index = item.second;
 
-            erase_edge(id1,id,is_cross_strand);
+            edges[id1][is_cross_strand].erase(id);
+
+            // Re-label the edge so it is not a member of any class
+            labels[label_index] = ShastaLabel(false,false,false,false);
         }
+
+        // Delete the entire set of outgoing edges from this node
+        edges[id][is_cross_strand] = {};
     }
 
     // Remove the name and id from the bimap
     id_vs_name.left.erase(id);
+}
+
+
+void AdjacencyMap::erase_node(const string& name){
+    auto iter = id_vs_name.right.find(name);
+
+    if (iter != id_vs_name.right.end()){
+        erase_node(iter->second);
+    }
 }
 
 
@@ -1061,9 +1085,7 @@ void for_each_edge_in_adjacency(
     // Initialize vector to track whether bidirectional edges have been visited
     vector <bool> visited_a(a.labels.size(), false);
 
-    for (size_t id0=0; id0<a.edges.size(); id0++) {
-        string name0 = a.id_vs_name.left.at(id0);
-
+    for (auto& [id0,name0]: a.id_vs_name) {
         for (bool is_cross_strand: {0, 1}) {
             for (auto& iter: a.edges[id0][is_cross_strand]) {
                 auto id1 = iter.first;
@@ -1113,49 +1135,49 @@ void write_edges_to_csv(path file_path, AdjacencyMap& a){
                                    const string& name1,
                                    bool is_cross_strand,
                                    const ShastaLabel& label){
-                                   file << name0 << ',' << name1 << ','
-                                        << (is_cross_strand ? "No" : "Yes") << ','
-                                        << (label.in_candidates ? "Yes" : "No") << ','
-                                        << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
-                                        << (label.in_read_graph ? "Yes" : "No") << ','
-                                        << (label.in_ref ? "Yes" : "No") << ',' << '\n';
+       file << name0 << ',' << name1 << ','
+            << (is_cross_strand ? "No" : "Yes") << ','
+            << (label.in_candidates ? "Yes" : "No") << ','
+            << (label.passes_readgraph2_criteria ? "Yes" : "No") << ','
+            << (label.in_read_graph ? "Yes" : "No") << ','
+            << (label.in_ref ? "Yes" : "No") << ',' << '\n';
 
-                                   if (label.in_candidates){
-                                       if (label.in_ref){
-                                           candidate_accuracy.n_true_positives++;
-                                       }
-                                       else {
-                                           candidate_accuracy.n_false_positives++;
-                                       }
-                                   }
-                                   if (label.passes_readgraph2_criteria){
-                                       if (label.in_ref){
-                                           filter_criteria_accuracy.n_true_positives++;
-                                       }
-                                       else {
-                                           filter_criteria_accuracy.n_false_positives++;
-                                       }
-                                   }
-                                   if (label.in_read_graph){
-                                       if (label.in_ref){
-                                           read_graph_accuracy.n_true_positives++;
-                                       }
-                                       else {
-                                           read_graph_accuracy.n_false_positives++;
-                                       }
-                                   }
-                                   if (label.in_ref){
-                                       if (not label.in_candidates){
-                                           candidate_accuracy.n_false_negatives++;
-                                       }
-                                       if (not label.passes_readgraph2_criteria){
-                                           filter_criteria_accuracy.n_false_negatives++;
-                                       }
-                                       if (not label.in_read_graph){
-                                           read_graph_accuracy.n_false_negatives++;
-                                       }
-                                   }
-                               });
+       if (label.in_candidates){
+           if (label.in_ref){
+               candidate_accuracy.n_true_positives++;
+           }
+           else {
+               candidate_accuracy.n_false_positives++;
+           }
+       }
+       if (label.passes_readgraph2_criteria){
+           if (label.in_ref){
+               filter_criteria_accuracy.n_true_positives++;
+           }
+           else {
+               filter_criteria_accuracy.n_false_positives++;
+           }
+       }
+       if (label.in_read_graph){
+           if (label.in_ref){
+               read_graph_accuracy.n_true_positives++;
+           }
+           else {
+               read_graph_accuracy.n_false_positives++;
+           }
+       }
+       if (label.in_ref){
+           if (not label.in_candidates){
+               candidate_accuracy.n_false_negatives++;
+           }
+           if (not label.passes_readgraph2_criteria){
+               filter_criteria_accuracy.n_false_negatives++;
+           }
+           if (not label.in_read_graph){
+               read_graph_accuracy.n_false_negatives++;
+           }
+       }
+    });
 
     cerr << "candidate_accuracy:\n"
          << "true_positives: \t" << candidate_accuracy.n_true_positives << '\n'
