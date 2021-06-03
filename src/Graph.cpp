@@ -1,5 +1,6 @@
 #include "OverlapMap.hpp"
 #include "Graph.hpp"
+#include "SvgPlot.hpp"
 #include "ogdf/basic/simple_graph_alg.h"
 
 using ogdf::makeParallelFree;
@@ -1070,6 +1071,136 @@ pair<bool,size_t> AdjacencyMap::find(string& name0, string& name1, bool is_cross
     auto result = this->find(iter0->second, iter1->second, is_cross_strand);
 
     return result;
+}
+
+
+pair<double,double> get_forward_node_coordinate(DoubleStrandedGraph& graph, uint32_t id){
+    auto forward_id = graph.get_forward_id(id);
+    auto forward_node = graph.nodes[forward_id];
+
+    string type = "circle";
+
+    double x = 0;
+    double y = 0;
+
+    if (forward_node != nullptr){
+        x = graph.graph_attributes.x(forward_node);
+        y = graph.graph_attributes.y(forward_node);
+    }
+
+    return {x,y};
+}
+
+
+pair<double,double> get_reverse_node_coordinate(DoubleStrandedGraph& graph, uint32_t id){
+    auto reverse_id = graph.get_reverse_id(id);
+
+    auto reverse_node = graph.nodes[reverse_id];
+
+    string type = "circle";
+
+    double x = 0;
+    double y = 0;
+
+    if (reverse_node != nullptr){
+        x = graph.graph_attributes.x(reverse_node);
+        y = graph.graph_attributes.y(reverse_node);
+    }
+
+    return {x,y};
+}
+
+
+void AdjacencyMap::plot(path output_path){
+    DoubleStrandedGraph graph;
+
+    for_each_edge_in_adjacency(*this, [&](const string& name0,
+                                          const string& name1,
+                                          bool is_cross_strand,
+                                          const ShastaLabel& label){
+
+        auto id_a = graph.add_node(name0);
+        auto id_b = graph.add_node(name1);
+
+        if (not is_cross_strand) {
+            graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
+            graph.add_edge(graph.get_reverse_id(id_a), graph.get_reverse_id(id_b));
+        }
+        else{
+            graph.add_edge(graph.get_forward_id(id_a), graph.get_reverse_id(id_b));
+            graph.add_edge(graph.get_reverse_id(id_a), graph.get_forward_id(id_b));
+        }
+    });
+
+    FMMMLayout layout_engine;
+    layout_engine.useHighLevelOptions(true);
+    layout_engine.unitEdgeLength(1.0);
+    layout_engine.newInitialPlacement(true);
+    layout_engine.qualityVersusSpeed(FMMMOptions::QualityVsSpeed::GorgeousAndEfficient);
+
+    layout_engine.call(graph.graph_attributes);
+
+//    graph.graph_attributes.directed() = false;
+//
+//    SvgPlot plot(output_path, 1200, 1200, 0, 0, 100, 100);
+//
+//    string color = "gray";
+//    string type = "circle";
+//
+//    for_each_edge_in_adjacency(*this, [&](const string& name0,
+//                                          const string& name1,
+//                                          bool is_cross_strand,
+//                                          const ShastaLabel& label){
+//
+//        auto id0 = graph.id_vs_name.right.at(name0);
+//        auto id1 = graph.id_vs_name.right.at(name1);
+//
+//        double forward_coord_x0;
+//        double forward_coord_y0;
+//
+//        double reverse_coord_x0;
+//        double reverse_coord_y0;
+//
+//        double forward_coord_x1;
+//        double forward_coord_y1;
+//
+//        double reverse_coord_x1;
+//        double reverse_coord_y1;
+//
+//        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id0);
+//        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id0);
+//
+//        tie(forward_coord_x1,forward_coord_y1) = get_forward_node_coordinate(graph,id1);
+//        tie(reverse_coord_x1,reverse_coord_y1) = get_reverse_node_coordinate(graph,id1);
+//
+//        if (is_cross_strand){
+//            plot.add_line(forward_coord_x0, forward_coord_y0, reverse_coord_x1, reverse_coord_y1, 1, color);
+//            plot.add_line(reverse_coord_x0, reverse_coord_y0, forward_coord_x1, forward_coord_y1, 1, color);
+//        }
+//        else{
+//            plot.add_line(forward_coord_x0, forward_coord_y0, forward_coord_x1, forward_coord_y1, 1, color);
+//            plot.add_line(reverse_coord_x0, reverse_coord_y0, reverse_coord_x1, reverse_coord_y1, 1, color);
+//        }
+//    });
+//
+//    for (uint32_t id=0; id<graph.nodes.size(); id++){
+//        auto& node = graph.nodes[id];
+//
+//        if (node == nullptr){
+//            continue;
+//        }
+//
+//        double forward_coord_x0;
+//        double forward_coord_y0;
+//
+//        double reverse_coord_x0;
+//        double reverse_coord_y0;
+//
+//        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id);
+//        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id);
+//
+//        plot.add_point(forward_coord_x0, forward_coord_y0, type, 1, color);
+//    }
 }
 
 

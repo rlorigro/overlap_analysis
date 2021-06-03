@@ -120,6 +120,9 @@ public:
     void erase_edge(uint32_t id0, uint32_t id1, bool is_cross_strand);
     void erase_node(uint32_t id);
     void erase_node(const string& name);
+
+    void plot(path output_path);
+
 };
 
 

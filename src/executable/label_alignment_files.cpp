@@ -186,17 +186,15 @@ int main(int argc, char* argv[]){
     options.add_options()
             ("a",
              value<path>(&ref_overlap_path)
-             ->required(),
+                     ->required(),
              "REFERENCE GRAPH: path of file from which overlap can be inferred:\n"
              "\tPAF file containing alignments to some reference\n "
              "\tCSV file containing a list of reads pairs, with an indication for whether the overlap is cross-strand\n")
 
-            ("b",
+            ("alignment_directory",
              value<path>(&alignment_directory)
-             ->required(),
-             "GRAPH TO BE EVALUATED: path of file from which overlap can be inferred:\n"
-             "\tPAF file containing alignments to some reference \n"
-             "\tCSV file containing a list of reads pairs, with an indication for whether the overlap is cross-strand\n")
+                     ->required(),
+             "Alignments TO BE EVALUATED: path of directory containing Shasta alignment details (one file per alignment)\n")
 
             ("output_dir",
              value<path>(&output_directory)
