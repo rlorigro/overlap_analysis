@@ -4,6 +4,10 @@
 #include "ogdf/basic/simple_graph_alg.h"
 
 using ogdf::makeParallelFree;
+
+#include <map>
+
+using std::multimap;
 using std::tie;
 
 namespace overlap_analysis{
@@ -40,7 +44,7 @@ bool DoubleStrandedGraph::remove_node(const string& name){
         return false;
     }
     else{
-        id = result->second;
+        id = result->get_left();
     }
 
     // ID map is single stranded, but the nodes vector has 2 nodes for every 1 read
@@ -98,7 +102,7 @@ uint32_t DoubleStrandedGraph::add_node(const string& read_name){
     // The bimap for id <-> name is not necessarily initialized for this read.
     // If it does exist, then just fetch the ID
     if (result != id_vs_name.right.end()) {
-        id = result->second;
+        id = result->get_left();
     }
     // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
     else{
@@ -109,7 +113,7 @@ uint32_t DoubleStrandedGraph::add_node(const string& read_name){
     reverse_id = 2*id + 1;
 
     // In the case where a new read has just been encountered, add it to the end of the nodes list,
-    // which should maintain size = bimap.size()
+    // which should maintain size = 2*bimap.size()
     if (reverse_id >= nodes.size()){
         // Forward
         nodes.emplace_back(graph.newNode());
@@ -132,8 +136,8 @@ bool DoubleStrandedGraph::has_edge(const string& a, const string& b) const{
         result = false;
     }
     else {
-        auto a_id = get_forward_id(a_iter->second);
-        auto b_id = get_forward_id(b_iter->second);
+        auto a_id = get_forward_id(a_iter->get_left());
+        auto b_id = get_forward_id(b_iter->get_left());
 
         if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
             result = false;
@@ -180,8 +184,8 @@ bool DoubleStrandedGraph::has_edge(const string& a, bool a_reversal, const strin
         result = false;
     }
     else {
-        auto a_id = get_double_stranded_id(a_iter->second, a_reversal);
-        auto b_id = get_double_stranded_id(b_iter->second, b_reversal);
+        auto a_id = get_double_stranded_id(a_iter->get_left(), a_reversal);
+        auto b_id = get_double_stranded_id(b_iter->get_left(), b_reversal);
 
         if (graph.searchEdge(nodes[a_id], nodes[b_id]) == nullptr) {
             result = false;
@@ -215,8 +219,6 @@ bool Graph::has_edge(const string& a, const string& b) const{
 
 
 void DoubleStrandedGraph::add_edge(uint32_t a, uint32_t b, bool allow_duplicates){
-    // Don't duplicate edges
-
     uint32_t flipped_id;
     uint32_t flipped_other_id;
 
@@ -264,7 +266,7 @@ void DoubleStrandedGraph::create_subgraph(const string& start_name, uint32_t rad
         throw runtime_error("ERROR: subgraph start node " + start_name + " not found in graph");
     }
     else{
-        start_id = result->second;
+        start_id = result->get_left();
     }
 
     uint32_t forward_start_id = 2*start_id;
@@ -563,7 +565,6 @@ void for_each_overlap_in_overlap_map(
         ) {
 
     for (auto& item: overlap_map.intervals){
-        cerr << item.first << '\n';
         const auto& overlaps = item.second;
         set<uint32_t> prev_read_set = {};
 
@@ -635,10 +636,6 @@ void for_each_paf_element(
             }
             else if (n_delimiters == 11){
                 paf_element.map_quality = stoi(token);
-
-                if (paf_element.map_quality >= min_quality){
-                    f(paf_element);
-                }
             }
 
             token.resize(0);
@@ -649,6 +646,10 @@ void for_each_paf_element(
                 throw runtime_error(
                         "ERROR: file provided does not contain sufficient tab delimiters to be PAF on line: " +
                         to_string(n_lines));
+            }
+
+            if (paf_element.map_quality >= min_quality){
+                f(paf_element);
             }
 
             token.resize(0);
@@ -709,6 +710,7 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
 
         // Skip any entries for which the node doesn't exist already
         if (iter == adjacency_map.id_vs_name.right.end()){
+//            cerr << "SKIPPING: " << paf_element.query_name << " because not found in graph\n";
             return;
         }
 
@@ -717,7 +719,7 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
         forward_id = 2 * id;
         reverse_id = 2 * id + 1;
 
-        cerr << "Found ref entry for " << paf_element.query_name << ' ' << id << ' ' << forward_id << ' ' << reverse_id << '\n';
+//        cerr << "Found ref entry for " << paf_element.query_name << ' ' << id << ' ' << forward_id << ' ' << reverse_id << '\n';
 
         if (not paf_element.is_reverse) {
             overlap_map.insert(paf_element.target_name, paf_element.start, paf_element.stop, forward_id);
@@ -739,7 +741,10 @@ void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, Adjacen
         // Create a label that only indicates ref membership
         ShastaLabel label(false, false, false, true);
 
-        cerr << "Updating label for edge: " << id << ' ' << other_id << '\n';
+        // Paf intervals can overlap (and will not be reduced in the set of ids if it is cross-strand)
+        if (id == other_id){
+            return;
+        }
 
         // Insert or update the edge with ref membership
         adjacency_map.insert_edge(id, other_id, is_cross_strand, label);
@@ -909,7 +914,7 @@ size_t AdjacencyMap::insert_node(const string& read_name){
     // The bimap for id <-> name is not necessarily initialized for this read.
     // If it already exists, then just fetch the ID
     if (result != id_vs_name.right.end()) {
-        id = result->second;
+        id = result->get_left();
     }
     // If it doesn't exist, then make a new ID by incrementing by 1 (aka get the size)
     else{
@@ -922,6 +927,10 @@ size_t AdjacencyMap::insert_node(const string& read_name){
 
 
 size_t AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_strand, ShastaLabel& label){
+    if (id0 == id1){
+        throw runtime_error("ERROR: self edges not allowed: " + to_string(id0) + "->" + to_string(id1));
+    }
+
     // Find the edge if it exists. The iterator points to a size_t label_index that contains the label for
     // this edge in labels[index]
     auto iter0 = edges.at(id0).at(is_cross_strand).find(id1);
@@ -975,10 +984,11 @@ void AdjacencyMap::erase_node(uint32_t id){
             // Re-label the edge so it is not a member of any class
             labels[label_index] = ShastaLabel(false,false,false,false);
         }
-
-        // Delete the entire set of outgoing edges from this node
-        edges[id][is_cross_strand] = {};
     }
+
+    // Delete the entire set of outgoing edges from this node
+    edges[id][false] = {};
+    edges[id][true] = {};
 
     // Remove the name and id from the bimap
     id_vs_name.left.erase(id);
@@ -989,7 +999,7 @@ void AdjacencyMap::erase_node(const string& name){
     auto iter = id_vs_name.right.find(name);
 
     if (iter != id_vs_name.right.end()){
-        erase_node(iter->second);
+        erase_node(iter->get_left());
     }
 }
 
@@ -1046,7 +1056,7 @@ bool AdjacencyMap::find(string& name0, string& name1, bool is_cross_strand, Shas
     }
 
     // See if the edge between name0,id0 and name1,id1 exists
-    bool success = this->find(iter0->second, iter1->second, is_cross_strand, label);
+    bool success = this->find(iter0->get_left(), iter1->get_left(), is_cross_strand, label);
 
     return success;
 }
@@ -1076,9 +1086,8 @@ pair<bool,size_t> AdjacencyMap::find(string& name0, string& name1, bool is_cross
 
 pair<double,double> get_forward_node_coordinate(DoubleStrandedGraph& graph, uint32_t id){
     auto forward_id = graph.get_forward_id(id);
-    auto forward_node = graph.nodes[forward_id];
 
-    string type = "circle";
+    auto forward_node = graph.nodes.at(forward_id);
 
     double x = 0;
     double y = 0;
@@ -1094,10 +1103,7 @@ pair<double,double> get_forward_node_coordinate(DoubleStrandedGraph& graph, uint
 
 pair<double,double> get_reverse_node_coordinate(DoubleStrandedGraph& graph, uint32_t id){
     auto reverse_id = graph.get_reverse_id(id);
-
     auto reverse_node = graph.nodes[reverse_id];
-
-    string type = "circle";
 
     double x = 0;
     double y = 0;
@@ -1111,7 +1117,113 @@ pair<double,double> get_reverse_node_coordinate(DoubleStrandedGraph& graph, uint
 }
 
 
-void AdjacencyMap::plot(path output_path){
+/*
+ * COLORS:
+ *   Red        #FF2800
+ *   Orange     #FF9E00
+ *   Yellow     #FFDD00
+ *   Lime       #B8F400
+ *   Green      #00C442
+ *   Blue       #0658C2
+ *   Indigo     #450BBA
+ *   Violet     #C50094
+ */
+
+void get_edge_color(const ShastaLabel& label, string& color){
+    if (label.in_read_graph){
+        if (label.in_ref){
+            color = "#00C442";      // Green
+        }
+        else {
+            color = "#FF2800";      // Red
+        }
+    }
+    else if (label.passes_readgraph2_criteria){
+        if (label.in_ref){
+            color = "#0658C2";      // Blue
+        }
+        else {
+            color = "#FF9E00";      // Orange
+        }
+    }
+    else if (label.in_candidates){
+        if (label.in_ref){
+            color = "#450BBA";      // Indigo
+        }
+        else {
+            color = "#FFDD00";      // Yellow
+        }
+    }
+    else if (label.in_ref){
+        color = "#C50094";          // Violet
+    }
+}
+
+
+size_t get_edge_z_order(const ShastaLabel& label){
+    size_t z_order;
+
+    if (label.in_read_graph){
+        if (label.in_ref){
+            z_order = 3;
+        }
+    }
+    else if (label.passes_readgraph2_criteria){
+        if (label.in_ref){
+            z_order = 2;
+        }
+    }
+    else if (label.in_candidates){
+        if (label.in_ref){
+            z_order = 1;
+        }
+    }
+    else if (label.in_ref){
+        z_order = 4;
+    }
+
+    return z_order;
+}
+
+
+class EdgeObject{
+public:
+    double x0;
+    double y0;
+    double x1;
+    double y1;
+    string color;
+
+    EdgeObject()=default;
+
+    EdgeObject(
+            double x0,
+            double y0,
+            double x1,
+            double y1,
+            string& color
+    );
+
+};
+
+
+EdgeObject::EdgeObject(
+        double x0,
+        double y0,
+        double x1,
+        double y1,
+        string& color
+):
+        x0(x0),
+        y0(y0),
+        x1(x1),
+        y1(y1),
+        color(color)
+{}
+
+
+
+void AdjacencyMap::plot(path output_path, bool read_graph_only){
     DoubleStrandedGraph graph;
 
     for_each_edge_in_adjacency(*this, [&](const string& name0,
@@ -1119,8 +1231,15 @@ void AdjacencyMap::plot(path output_path){
                                           bool is_cross_strand,
                                           const ShastaLabel& label){
 
+        if (read_graph_only and not label.in_read_graph){
+            return;
+        }
+
         auto id_a = graph.add_node(name0);
         auto id_b = graph.add_node(name1);
+
+//        cerr << id_a << " " << name0 << " " << graph.get_forward_id(id_a) << " " << graph.get_reverse_id(id_a) << '\n';
+//        cerr << id_b << " " << name1 << " " << graph.get_forward_id(id_b) << " " << graph.get_reverse_id(id_b) << '\n';
 
         if (not is_cross_strand) {
             graph.add_edge(graph.get_forward_id(id_a), graph.get_forward_id(id_b));
@@ -1132,6 +1251,8 @@ void AdjacencyMap::plot(path output_path){
         }
     });
 
+    graph.graph_attributes = GraphAttributes(graph.graph);
+
     FMMMLayout layout_engine;
     layout_engine.useHighLevelOptions(true);
     layout_engine.unitEdgeLength(1.0);
@@ -1140,67 +1261,126 @@ void AdjacencyMap::plot(path output_path){
 
     layout_engine.call(graph.graph_attributes);
 
-//    graph.graph_attributes.directed() = false;
-//
-//    SvgPlot plot(output_path, 1200, 1200, 0, 0, 100, 100);
-//
-//    string color = "gray";
-//    string type = "circle";
-//
-//    for_each_edge_in_adjacency(*this, [&](const string& name0,
-//                                          const string& name1,
-//                                          bool is_cross_strand,
-//                                          const ShastaLabel& label){
-//
-//        auto id0 = graph.id_vs_name.right.at(name0);
-//        auto id1 = graph.id_vs_name.right.at(name1);
-//
-//        double forward_coord_x0;
-//        double forward_coord_y0;
-//
-//        double reverse_coord_x0;
-//        double reverse_coord_y0;
-//
-//        double forward_coord_x1;
-//        double forward_coord_y1;
-//
-//        double reverse_coord_x1;
-//        double reverse_coord_y1;
-//
-//        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id0);
-//        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id0);
-//
-//        tie(forward_coord_x1,forward_coord_y1) = get_forward_node_coordinate(graph,id1);
-//        tie(reverse_coord_x1,reverse_coord_y1) = get_reverse_node_coordinate(graph,id1);
-//
-//        if (is_cross_strand){
-//            plot.add_line(forward_coord_x0, forward_coord_y0, reverse_coord_x1, reverse_coord_y1, 1, color);
-//            plot.add_line(reverse_coord_x0, reverse_coord_y0, forward_coord_x1, forward_coord_y1, 1, color);
-//        }
-//        else{
-//            plot.add_line(forward_coord_x0, forward_coord_y0, forward_coord_x1, forward_coord_y1, 1, color);
-//            plot.add_line(reverse_coord_x0, reverse_coord_y0, reverse_coord_x1, reverse_coord_y1, 1, color);
-//        }
-//    });
-//
-//    for (uint32_t id=0; id<graph.nodes.size(); id++){
-//        auto& node = graph.nodes[id];
-//
-//        if (node == nullptr){
-//            continue;
-//        }
-//
-//        double forward_coord_x0;
-//        double forward_coord_y0;
-//
-//        double reverse_coord_x0;
-//        double reverse_coord_y0;
-//
-//        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id);
-//        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id);
-//
-//        plot.add_point(forward_coord_x0, forward_coord_y0, type, 1, color);
-//    }
+    graph.graph_attributes.directed() = false;
+
+    double x_max = 0;
+    double y_max = 0;
+
+    for (auto& [id, name]: graph.id_vs_name){
+        double forward_coord_x0;
+        double forward_coord_y0;
+
+        double reverse_coord_x0;
+        double reverse_coord_y0;
+
+        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id);
+        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id);
+
+        if (forward_coord_x0 > x_max){
+            x_max = forward_coord_x0;
+        }
+        if (forward_coord_y0 > y_max){
+            y_max = forward_coord_y0;
+        }
+        if (reverse_coord_x0 > x_max){
+            x_max = reverse_coord_x0;
+        }
+        if (reverse_coord_y0 > y_max){
+            y_max = reverse_coord_y0;
+        }
+    }
+
+    SvgPlot plot(output_path, 1200, 1200, 0, x_max, 0, y_max);
+
+    string edge_color;
+    string node_color = "black";
+    string type = "circle";
+
+    cerr << graph.nodes.size() << " " << graph.id_vs_name.size() << '\n';
+
+    map <size_t,vector<EdgeObject> > edge_objects;
+
+    for_each_edge_in_adjacency(*this, [&](const string& name0,
+                                          const string& name1,
+                                          bool is_cross_strand,
+                                          const ShastaLabel& label){
+
+        if (read_graph_only and not label.in_read_graph){
+            return;
+        }
+
+        auto id0 = graph.id_vs_name.right.at(name0);
+        auto id1 = graph.id_vs_name.right.at(name1);
+
+//        cerr << id0 << "___" << name0 << " " << id1 << "___" << name1 << " " << is_cross_strand << '\n';
+
+        double forward_coord_x0;
+        double forward_coord_y0;
+
+        double reverse_coord_x0;
+        double reverse_coord_y0;
+
+        double forward_coord_x1;
+        double forward_coord_y1;
+
+        double reverse_coord_x1;
+        double reverse_coord_y1;
+
+        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id0);
+        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id0);
+
+        tie(forward_coord_x1,forward_coord_y1) = get_forward_node_coordinate(graph,id1);
+        tie(reverse_coord_x1,reverse_coord_y1) = get_reverse_node_coordinate(graph,id1);
+
+        get_edge_color(label, edge_color);
+        auto z_order = get_edge_z_order(label);
+
+//        cerr << z_order << ' '
+//             << edge_color << ' '
+//             << label.in_candidates << ' '
+//             << label.passes_readgraph2_criteria << ' '
+//             << label.in_read_graph << ' '
+//             << label.in_ref << '\n';
+
+        EdgeObject e0;
+        EdgeObject e1;
+
+        if (is_cross_strand){
+            e0 = EdgeObject(forward_coord_x0, forward_coord_y0, reverse_coord_x1, reverse_coord_y1, edge_color);
+            e1 = EdgeObject(reverse_coord_x0, reverse_coord_y0, forward_coord_x1, forward_coord_y1, edge_color);
+        }
+        else{
+            e0 = EdgeObject(forward_coord_x0, forward_coord_y0, forward_coord_x1, forward_coord_y1, edge_color);
+            e1 = EdgeObject(reverse_coord_x0, reverse_coord_y0, reverse_coord_x1, reverse_coord_y1, edge_color);
+        }
+
+        edge_objects[z_order].emplace_back(e0);
+        edge_objects[z_order].emplace_back(e1);
+    });
+
+    // Add the edges to the SVG in the order that is determined by their ShastaLabel
+    for (auto& [z,item]: edge_objects){
+        for (auto& e: item){
+            plot.add_line(e.x0, e.y0, e.x1, e.y1, 0.5, e.color);
+        }
+    }
+
+    for (auto& [id, name]: graph.id_vs_name){
+        double forward_coord_x0;
+        double forward_coord_y0;
+
+        double reverse_coord_x0;
+        double reverse_coord_y0;
+
+        tie(forward_coord_x0,forward_coord_y0) = get_forward_node_coordinate(graph,id);
+        tie(reverse_coord_x0,reverse_coord_y0) = get_reverse_node_coordinate(graph,id);
+
+        string title_forward = name + "+";
+        string title_reverse = name + "-";
+
+        plot.add_point(forward_coord_x0, forward_coord_y0, type, 1, node_color, title_forward);
+        plot.add_point(reverse_coord_x0, reverse_coord_y0, type, 1, node_color, title_reverse);
+    }
 }
 
 

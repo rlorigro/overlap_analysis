@@ -94,6 +94,14 @@ public:
             T y,
             string& type,
             T2 size,
+            T3& color,
+            string& title);
+
+    template <class T, class T2, class T3> void add_point(
+            T x,
+            T y,
+            string& type,
+            T2 size,
             T3& color);
 
     template <class T, class T2, class T3, class T4> void add_curve(
@@ -270,17 +278,38 @@ template <class T, class T2, class T3> void SvgPlot::add_point(
         T y,
         string& type,
         T2 size,
-        T3& color){
+        T3& color) {
+
+    string title;
+
+    add_point(x, y, type, size, color, title);
+}
+
+
+template <class T, class T2, class T3> void SvgPlot::add_point(
+        T x,
+        T y,
+        string& type,
+        T2 size,
+        T3& color,
+        string& title){
 
     check_file();
 
     if (type == "circle") {
         file << '\t' << "<circle cx='" << x << "' cy='" << y << "' r='" << size
-             << "' fill='" << color << "'/>" << '\n';
+             << "' fill='" << color;
     }
     else if (type == "rect") {
         file << '\t' << "<rect x='" << x << "' y='" << y << "' width='" << size << "' height='" << size
-             << "' fill='" << color << "'/>" << '\n';
+             << "' fill='" << color;
+    }
+
+    if (not title.empty()){
+        file << "'>\n" << "\t\t" << "<title>" << title << "</title>" << "\n\t" << "</" << type << ">" << '\n';
+    }
+    else{
+        file << "'/>" << '\n';
     }
 }
 

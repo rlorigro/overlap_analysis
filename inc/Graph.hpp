@@ -121,7 +121,7 @@ public:
     void erase_node(uint32_t id);
     void erase_node(const string& name);
 
-    void plot(path output_path);
+    void plot(path output_path, bool read_graph_only=false);
 
 };
 

@@ -16,4 +16,15 @@ PafElement::PafElement(string& target_name,
     is_reverse(is_reverse)
 {}
 
+ostream& operator<<(ostream& o, PafElement& e){
+    cerr << e.query_name << " "
+         << e.is_reverse << " "
+         << e.target_name << " "
+         << e.start << " "
+         << e.stop << " "
+         << e.map_quality << " ";
+
+    return o;
+}
+
 }

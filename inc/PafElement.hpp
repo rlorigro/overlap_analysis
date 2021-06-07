@@ -2,8 +2,11 @@
 #define OVERLAP_ANALYSIS_PAFELEMENT_HPP
 
 #include <string>
+#include <iostream>
 
 using std::string;
+using std::ostream;
+using std::cerr;
 
 namespace overlap_analysis {
 
@@ -25,6 +28,8 @@ public:
                uint32_t map_quality,
                bool is_reverse);
 };
+
+ostream& operator<<(ostream& o, PafElement& e);
 
 }
 

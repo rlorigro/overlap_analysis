@@ -93,12 +93,12 @@ int main(int argc, char* argv[]){
             ("fastq,i",
              value<path>(&fastq_path)
              ->required(),
-             "File path of PAF file containing alignments to some reference")
+             "File path of fastq containing sequences to be self-mapped")
 
             ("output_directory,o",
              value<path>(&output_directory)
              ->required(),
-             "File path of PAF file containing alignments to some reference")
+             "Directory path designating where to dump output files")
             ;
 
     variables_map vm;

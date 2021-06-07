@@ -118,7 +118,7 @@ int main(int argc, char* argv[]){
             ("fastq",
              value<path>(&fastq_path)
                      ->required(),
-             "File path of PAF file containing alignments to some reference")
+             "File path of fastq containing sequences to be self-mapped")
             ;
 
     variables_map vm;

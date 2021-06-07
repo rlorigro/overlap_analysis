@@ -128,18 +128,38 @@ void evaluate_overlaps(
 
     construct_adjacency_map(overlap_path, min_quality, adjacency);
 
+    set<string> excluded_reads;
+
     add_reference_edges_to_adjacency_map(ref_overlap_path, min_quality, adjacency);
 
     if (not excluded_reads_path.empty()){
         // TODO: add chimera/palindrome labeling
-    }
-
-    if (plot) {
-        adjacency.plot(output_directory / "double_stranded_graph.svg");
+        load_excluded_read_names_as_set(excluded_reads_path, excluded_reads);
+        for (auto& name: excluded_reads){
+            adjacency.erase_node(name);
+        }
     }
 
     path edge_csv_file_path = output_directory / "labeled_candidates.csv";
     write_edges_to_csv(edge_csv_file_path, adjacency);
+
+    if (plot) {
+        adjacency.plot(output_directory / "double_stranded_graph.svg");
+        adjacency.plot(output_directory / "double_stranded_graph_READGRAPH_ONLY.svg", true);
+
+        for_each_edge_in_adjacency(adjacency, [&](const string& name0,
+                                                  const string& name1,
+                                                  bool is_cross_strand,
+                                                  const ShastaLabel& label){
+            if (not label.in_ref){
+                auto id0 = adjacency.id_vs_name.right.at(name0);
+                auto id1 = adjacency.id_vs_name.right.at(name1);
+                adjacency.erase_edge(id0, id1, is_cross_strand);
+            }
+        });
+
+        adjacency.plot(output_directory / "double_stranded_graph_REF_ONLY.svg");
+    }
 }
 
 

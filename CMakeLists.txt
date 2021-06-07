@@ -19,7 +19,9 @@ set(CMAKE_CXX_FLAGS )
 #set(ASAN_OPTIONS=check_initialization_order=1)
 #set(ASAN_OPTIONS=detect_leaks=1)
 
-set(CMAKE_CXX_FLAGS "-fsanitize=address -fexceptions")
+set(CMAKE_CXX_FLAGS "-fsanitize=address -fexceptions")  # leak checking and address sanitization
+#set(CMAKE_CXX_FLAGS "-fexceptions")
+
 add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
 #add_definitions(-O3 -Wall)              # Much optimization
 
