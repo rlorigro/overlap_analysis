@@ -934,7 +934,7 @@ size_t AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_stran
     // Find the edge if it exists. The iterator points to a size_t label_index that contains the label for
     // this edge in labels[index]
     auto iter0 = edges.at(id0).at(is_cross_strand).find(id1);
-    size_t edge_label_index = iter0->second;
+    size_t edge_label_index;
 
     // If an entry is not found, it should not be found in both directions
     if (iter0 == edges[id0][is_cross_strand].end()){
@@ -948,6 +948,7 @@ size_t AdjacencyMap::insert_edge(uint32_t id0, uint32_t id1, bool is_cross_stran
     // If the label/edge exists already, increment it (find the union of label membership)
     else if (iter0 != edges.at(id0)[is_cross_strand].end()){
         labels.at(iter0->second) |= label;
+        edge_label_index = iter0->second;
     }
     else{
         throw runtime_error("ERROR: asymmetrical entry in undirected graph " + to_string(id0) + " " + to_string(id1) + (is_cross_strand ? "0" : "1"));
