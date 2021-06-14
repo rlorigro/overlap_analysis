@@ -83,8 +83,8 @@ def test(model, loader):
     for x, y in loader:
         y, y_predict = test_batch(model=model, x=x, y=y)
 
-        y_vectors.append(y.data.numpy())
-        y_predict_vectors.append(torch.sigmoid(y_predict).data.numpy())
+        y_vectors.append(y.data.cpu().numpy())
+        y_predict_vectors.append(torch.sigmoid(y_predict).data.cpu().numpy())
 
         batch_index += 1
 
@@ -111,7 +111,7 @@ def run(data_loader_train, data_loader_test):
     loss_fn = nn.BCEWithLogitsLoss()  # Binary cross entropy which does sigmoid 0-1 transform
 
     # Train and get the resulting loss per iteration
-    loss = train(model=shallow_model.eval(), loader=data_loader_train, optimizer=optimizer, loss_fn=loss_fn, epochs=n_epochs)
+    loss = train(model=shallow_model, loader=data_loader_train, optimizer=optimizer, loss_fn=loss_fn, epochs=n_epochs)
     shallow_model.eval()
 
     # Test and get the resulting predicted y values
