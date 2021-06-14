@@ -117,6 +117,8 @@ def run(data_loader_train, data_loader_test):
     # Test and get the resulting predicted y values
     y_predict = test(model=shallow_model, loader=data_loader_test)
 
+    print("Done")
+
     return loss, y_predict
 
 
