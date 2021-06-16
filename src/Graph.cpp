@@ -700,6 +700,9 @@ void load_paf_as_graph(
 void add_paf_edges_to_adjacency_map(path paf_path, uint32_t min_quality, AdjacencyMap& adjacency_map){
     RegionalOverlapMap overlap_map;
 
+    // TODO: look at 'de' tag gap compression ratio
+    // TODO: look at number of clipped bases
+
     cerr << "\tParsing PAF as interval map..." << '\n';
     for_each_paf_element(paf_path, min_quality, [&](PafElement& paf_element){
         uint32_t id;
@@ -1224,7 +1227,7 @@ EdgeObject::EdgeObject(
 
 
 
-void AdjacencyMap::plot(path output_path, bool read_graph_only){
+void AdjacencyMap::plot(path output_path, bool read_graph_only, bool ref_only){
     DoubleStrandedGraph graph;
 
     for_each_edge_in_adjacency(*this, [&](const string& name0,
@@ -1233,6 +1236,10 @@ void AdjacencyMap::plot(path output_path, bool read_graph_only){
                                           const ShastaLabel& label){
 
         if (read_graph_only and not label.in_read_graph){
+            return;
+        }
+
+        if (ref_only and not label.in_ref){
             return;
         }
 
@@ -1307,6 +1314,10 @@ void AdjacencyMap::plot(path output_path, bool read_graph_only){
                                           const ShastaLabel& label){
 
         if (read_graph_only and not label.in_read_graph){
+            return;
+        }
+
+        if (ref_only and not label.in_ref){
             return;
         }
 

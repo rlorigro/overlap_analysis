@@ -12,6 +12,13 @@ using overlap_analysis::PafElement;
 using overlap_analysis::RegionalOverlapMap;
 using overlap_analysis::ShastaLabel;
 
+#include "boost/program_options.hpp"
+
+using boost::program_options::options_description;
+using boost::program_options::variables_map;
+using boost::program_options::bool_switch;
+using boost::program_options::value;
+
 #include <iostream>
 #include <string>
 
@@ -146,19 +153,7 @@ void evaluate_overlaps(
     if (plot) {
         adjacency.plot(output_directory / "double_stranded_graph.svg");
         adjacency.plot(output_directory / "double_stranded_graph_READGRAPH_ONLY.svg", true);
-
-        for_each_edge_in_adjacency(adjacency, [&](const string& name0,
-                                                  const string& name1,
-                                                  bool is_cross_strand,
-                                                  const ShastaLabel& label){
-            if (not label.in_ref){
-                auto id0 = adjacency.id_vs_name.right.at(name0);
-                auto id1 = adjacency.id_vs_name.right.at(name1);
-                adjacency.erase_edge(id0, id1, is_cross_strand);
-            }
-        });
-
-        adjacency.plot(output_directory / "double_stranded_graph_REF_ONLY.svg");
+        adjacency.plot(output_directory / "double_stranded_graph_REF_ONLY.svg", false, true);
     }
 }
 

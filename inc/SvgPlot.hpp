@@ -304,6 +304,9 @@ template <class T, class T2, class T3> void SvgPlot::add_point(
         file << '\t' << "<rect x='" << x << "' y='" << y << "' width='" << size << "' height='" << size
              << "' fill='" << color;
     }
+    else{
+        throw runtime_error("ERROR: unrecognized svg shape: " + type);
+    }
 
     if (not title.empty()){
         file << "'>\n" << "\t\t" << "<title>" << title << "</title>" << "\n\t" << "</" << type << ">" << '\n';

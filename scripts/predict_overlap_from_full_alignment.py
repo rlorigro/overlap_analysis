@@ -1,8 +1,6 @@
-from Adabound import AdaBoundW, AdaBound
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 from torch import optim
-from matplotlib import pyplot
 import torch.nn as nn
 import torch
 import numpy
@@ -23,11 +21,6 @@ def train_batch(model, x, y, optimizer, loss_fn):
     # Run forward calculation
     y_predict = model.forward(x)
 
-    # print()
-    # print(x)
-    # print(torch.sigmoid(y_predict).data.numpy().T[:10])
-    # print(y[:10])
-
     # Compute loss.
     loss = loss_fn(y_predict.squeeze(), y.float())
 
@@ -43,6 +36,18 @@ def train_batch(model, x, y, optimizer, loss_fn):
     # Calling the step function on an Optimizer makes an update to its
     # parameters
     optimizer.step()
+
+    # print()
+    # print(x)
+    # print(torch.sigmoid(y_predict).data.numpy().T[:10])
+    # print(y[:10])
+
+    y_debug = torch.round(y.cpu().data)
+    y_predict_debug = torch.squeeze(y_predict.cpu().data)
+
+    print(y_predict_debug)
+    print(y_debug)
+    print(torch.round(torch.sigmoid(y_predict_debug)))
 
     return loss.data.item()
 
@@ -81,8 +86,8 @@ def test(model, loader):
     for x, y in loader:
         y, y_predict = test_batch(model=model, x=x, y=y)
 
-        y_vectors.append(y.data.numpy())
-        y_predict_vectors.append(torch.sigmoid(y_predict).data.numpy())
+        y_vectors.append(y.cpu().data.numpy())
+        y_predict_vectors.append(torch.sigmoid(y_predict.cpu()).data.numpy())
 
         batch_index += 1
 
@@ -93,23 +98,27 @@ def test(model, loader):
 
 def run(data_loader_train, data_loader_test):
     # n_epochs is the number of times the training set should be iterated over in its entirety
-    n_epochs = 10
+    n_epochs = 2
 
     # Define the hyperparameters
-    learning_rate = 1e-3
-    shallow_model = AlignmentClassifier().to(device)
+    learning_rate = 1e-4
+
+    model = AlignmentClassifier()
+    model.to(device)
+    model.train()
 
     # Initialize the optimizer with above parameters
-    optimizer = AdaBound(shallow_model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.0001)
 
     # Define the loss function
     loss_fn = nn.BCEWithLogitsLoss()  # Binary cross entropy which does sigmoid 0-1 transform
 
     # Train and get the resulting loss per iteration
-    loss = train(model=shallow_model.eval(), loader=data_loader_train, optimizer=optimizer, loss_fn=loss_fn, epochs=n_epochs)
+    loss = train(model=model, loader=data_loader_train, optimizer=optimizer, loss_fn=loss_fn, epochs=n_epochs)
+    model.eval()
 
     # Test and get the resulting predicted y values
-    y_predict = test(model=shallow_model, loader=data_loader_test)
+    y_predict = test(model=model, loader=data_loader_test)
 
     return loss, y_predict
 
@@ -119,9 +128,10 @@ class AlignmentClassifier(nn.Module):
         # Perform initialization of the pytorch superclass
         super(AlignmentClassifier, self).__init__()
 
-        self.input_size = 5
-        self.num_layers = 1
-        self.hidden_size = 128
+        self.input_size = 4
+        self.num_layers = 2
+        self.hidden_size = 64
+        self.bidirectional = True
 
         # Define RNN
         # h_n has shape:
@@ -133,14 +143,17 @@ class AlignmentClassifier(nn.Module):
             input_size=self.input_size,
             num_layers=self.num_layers,
             hidden_size=self.hidden_size,
-            bidirectional=True,
+            bidirectional=self.bidirectional,
             batch_first=True)
 
         # Define simple linear classifier that operates on flattened RNN output
-        in_size = self.num_layers * 2 * self.hidden_size
+        in_size = self.num_layers * (1 + self.bidirectional) * self.hidden_size
         out_size = 1
 
-        self.linear = torch.nn.Linear(in_size, out_size)
+        linear_hidden_size = 128
+
+        self.linear1 = torch.nn.Linear(in_size, linear_hidden_size)
+        self.linear2 = torch.nn.Linear(linear_hidden_size, out_size)
 
     def forward(self,x):
         output,h_n = self.rnn(x)
@@ -148,7 +161,9 @@ class AlignmentClassifier(nn.Module):
         # Reorder axes so batch is first ... For some reason still is necessary if "batch_first" is specified for GRU?
         h_n = h_n.permute(1,0,2)
 
-        y = self.linear(torch.flatten(h_n, start_dim=1))
+        y = self.linear1(torch.flatten(h_n, start_dim=1))
+        y = torch.relu(y)
+        y = self.linear2(y)
 
         return y
 
@@ -223,15 +238,32 @@ class AlignmentDataset:
                     continue
 
                 # kmerId,ordinal0,ordinal1,rlePosition0,rlePosition1,
-                item = torch.tensor(list(map(int, line.split(',')[:-1])), device=device)
+                item = torch.tensor(list(map(float, line.split(',')[1:-1])), device=device)
                 items.append(item)
 
         x = torch.stack(items, dim=1)
         x = x.permute(1,0)
 
+        # print()
+        # print(x[0][1], x[0][0])
+        # print(x[:4][:])
+        if x[0][1] > x[0][0]:
+            p = [1,0,3,2]
+            x = x[:,p]
+        # print(x[:4][:])
+
+        x -= torch.clone(x[0][:])
+
         y = torch.zeros([1])
         if i >= self.label_indexes[1]:
             y[0] = 1
+
+        # print(x[:4][:])
+        # x = torch.diff(x,dim=0)
+        # print(x[:4][:])
+
+        x[:][1:2] /= 100
+        x[:][2:] /= 10_000
 
         return x,y
 
@@ -246,7 +278,26 @@ def main():
     train_dataset = AlignmentDataset(train_directory)
     test_dataset = AlignmentDataset(test_directory)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=8, collate_fn=pad_collate, shuffle=True)
+    n_false = train_dataset.label_indexes[True]
+    n_true = len(train_dataset) - n_false
+
+    print(n_false)
+    print(n_true)
+
+    false_weight = 1/n_false
+    true_weight = 1/n_true
+
+    weights_per_sample = [false_weight]*n_false + [true_weight]*n_true
+
+    print(len(weights_per_sample))
+
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=weights_per_sample,
+        replacement=False,
+        num_samples=min(n_false,n_true)*2
+    )
+
+    train_dataloader = DataLoader(train_dataset, batch_size=8, collate_fn=pad_collate, sampler=sampler)
     test_dataloader = DataLoader(test_dataset, batch_size=8, collate_fn=pad_collate, shuffle=True)
 
     run(data_loader_train=train_dataloader, data_loader_test=test_dataloader)

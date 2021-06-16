@@ -5,15 +5,6 @@
 #include "PafElement.hpp"
 #include "graph_utils.hpp"
 
-#include "boost/program_options.hpp"
-#include "boost/bimap.hpp"
-
-using boost::program_options::options_description;
-using boost::program_options::variables_map;
-using boost::program_options::bool_switch;
-using boost::program_options::value;
-using boost::bimap;
-
 #include <ogdf/basic/GraphAttributes.h>
 #include <ogdf/basic/graphics.h>
 #include <ogdf/energybased/FMMMLayout.h>
@@ -25,6 +16,10 @@ using ogdf::edge;
 using ogdf::FMMMLayout;
 using ogdf::FMMMOptions;
 using ogdf::Shape;
+
+#include "boost/bimap.hpp"
+
+using boost::bimap;
 
 #include <experimental/filesystem>
 #include <unordered_map>
@@ -121,7 +116,7 @@ public:
     void erase_node(uint32_t id);
     void erase_node(const string& name);
 
-    void plot(path output_path, bool read_graph_only=false);
+    void plot(path output_path, bool read_graph_only=false, bool ref_only=false);
 
 };
 

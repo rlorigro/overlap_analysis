@@ -293,6 +293,7 @@ set(EXECUTABLES
         find_overlapping_alignments
         label_alignment_files
         plot_alignment_as_double_stranded_graph
+        plot_shasta_alignments
         self_align
         )
 

@@ -13,6 +13,13 @@ using overlap_analysis::PafElement;
 using overlap_analysis::RegionalOverlapMap;
 using overlap_analysis::ShastaLabel;
 
+#include "boost/program_options.hpp"
+
+using boost::program_options::options_description;
+using boost::program_options::variables_map;
+using boost::program_options::bool_switch;
+using boost::program_options::value;
+
 #include <unordered_set>
 #include <iostream>
 #include <string>
