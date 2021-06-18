@@ -386,7 +386,7 @@ int main(int argc, char* argv[]){
             ("output_directory,o",
              value<path>(&output_directory)
              ->required(),
-             "File path of PAF file containing alignments to some reference")
+             "Path of directory to save output")
             ;
 
     variables_map vm;
