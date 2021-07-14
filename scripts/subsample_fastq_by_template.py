@@ -169,6 +169,7 @@ def main(template_path, subsample_path, output_dir, max_bases, min_length, max_r
                 break
 
     sys.stderr.write('\n')
+    sys.stderr.write("Total bases in subsample: %d\n" % subsampled_bases)
 
     figure = pyplot.figure()
     axes = pyplot.axes()
