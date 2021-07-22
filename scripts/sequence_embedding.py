@@ -1,4 +1,4 @@
-from modules.Fastq import *
+from modules.Fastx import *
 from modules.Kmer import *
 import mmap
 

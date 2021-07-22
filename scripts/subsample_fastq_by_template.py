@@ -1,6 +1,6 @@
 from matplotlib import pyplot
 from modules.IterativeHistogram import IterativeHistogram
-from modules.Fastq import *
+from modules.Fastx import *
 import argparse
 import mmap
 import os

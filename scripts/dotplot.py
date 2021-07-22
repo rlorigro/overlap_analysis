@@ -1,4 +1,4 @@
-from modules.Fastq import *
+from modules.Fastx import *
 
 from multiprocessing import cpu_count
 from matplotlib import pyplot

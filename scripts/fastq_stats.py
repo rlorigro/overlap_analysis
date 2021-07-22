@@ -1,4 +1,4 @@
-from modules.Fastq import build_index
+from modules.Fastx import build_index
 
 
 def main():

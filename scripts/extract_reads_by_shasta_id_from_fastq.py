@@ -1,4 +1,4 @@
-from modules.Fastq import *
+from modules.Fastx import *
 
 import argparse
 import struct
