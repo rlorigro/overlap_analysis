@@ -125,12 +125,15 @@ void filter_paf(path paf_path){
 
     path non_chimer_lengths_path = paf_path;
     path chimer_lengths_path = paf_path;
+    path chimer_subchains_path = paf_path;
 
     non_chimer_lengths_path.replace_extension("non_chimer_lengths.txt");
     chimer_lengths_path.replace_extension("chimer_lengths.txt");
+    chimer_subchains_path.replace_extension("chimer_subchains.txt");
 
     ofstream non_chimer_lengths_file(non_chimer_lengths_path);
     ofstream chimer_lengths_file(chimer_lengths_path);
+    ofstream chimer_subchains_file(chimer_subchains_path);
 
     for (auto& [name, chain]: alignment_chains.chains) {
         // Sort by order of occurrence in query (read) sequence
@@ -154,7 +157,13 @@ void filter_paf(path paf_path){
 
             chimer_id_file << name << '\n';
 
-            print_subchains(chain, subchain_bounds, name);
+            chimer_subchains_file << name << '\t';
+            for (auto& item: subchain_bounds) {
+                chimer_subchains_file << '(' << chain.chain[item.first].query_start << ',' << chain.chain[item.second - 1].query_stop << ")" << ',';
+            }
+            chimer_subchains_file << '\n';
+
+//            print_subchains(chain, subchain_bounds, name);
         }
         else{
             non_chimer_id_file << name << '\n';
