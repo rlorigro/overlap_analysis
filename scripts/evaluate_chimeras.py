@@ -1,10 +1,12 @@
+import datetime
+from generate_chimer_stats import generate_chimer_stats
 from subprocess import run
 import argparse
 import sys
 import os
 
 
-def run_evaluation(reference_path, fastq_path, s3_path, dry, n_threads):
+def run_evaluation(reference_path, fastq_path, dry, n_threads):
     ref_name = "_".join(os.path.basename(reference_path).split('.')[:-1])
     fastq_name = "_".join(os.path.basename(fastq_path).split('.')[:-1])
 
@@ -57,11 +59,45 @@ def run_evaluation(reference_path, fastq_path, s3_path, dry, n_threads):
     if not dry:
         run(chimera_exe_args, check=True)
 
+    non_chimeric_lengths_path = os.path.join(output_dir, output_name + ".non_chimer_lengths.txt")
+    chimeric_lengths_path = os.path.join(output_dir, output_name + ".chimer_lengths.txt")
 
-def main(reference_path, fastq_paths, s3_path, dry, n_threads):
+    return non_chimeric_lengths_path, chimeric_lengths_path
+
+
+def main(reference_path, fastq_paths, dry, n_threads):
+    paths = list()
+
     for path in fastq_paths.split(','):
-        run_evaluation(reference_path=reference_path, fastq_path=path, s3_path=s3_path, dry=dry, n_threads=n_threads)
-        print()
+        non_chimeric_lengths_path = None
+        chimeric_lengths_path = None
+
+        result = run_evaluation(
+            reference_path=reference_path,
+            fastq_path=path,
+            dry=dry,
+            n_threads=n_threads)
+
+        if result is not None:
+            non_chimeric_lengths_path, chimeric_lengths_path = result
+
+            paths.append(non_chimeric_lengths_path)
+            paths.append(chimeric_lengths_path)
+
+    results = generate_chimer_stats(paths=paths)
+
+    dt = datetime.datetime.now()
+    output_path = "results_" + dt.strftime("%m_%d_%Y_%H:%M:%S") + ".csv"
+    print(output_path)
+
+    with open(output_path, 'w') as file:
+        for r,result in enumerate(results):
+            if r == 0:
+                file.write(result.get_header())
+                file.write('\n')
+
+            file.write(str(result))
+            file.write('\n')
 
 
 if __name__ == "__main__":
@@ -79,14 +115,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="comma-separated list of fastq file paths to be aligned"
-    )
-
-    parser.add_argument(
-        "--s3",
-        type=str,
-        default=None,
-        required=False,
-        help="AWS s3 URI of directory to upload to, if not specified, no attempt to upload is made"
     )
 
     parser.add_argument(
@@ -110,7 +138,6 @@ if __name__ == "__main__":
     main(
         reference_path=args.ref,
         fastq_paths=args.fastq,
-        s3_path=args.s3,
         dry=args.dry,
         n_threads=args.n_threads
     )
